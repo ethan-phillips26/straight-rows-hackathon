@@ -1,0 +1,17 @@
+# Claude Code files
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+
+# Planning docs (kept local)
+docs/
+
+# Data (fetched by scripts/get_data.py)
+data/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/

@@ -1,0 +1,8 @@
+# Python 3.11+ (developed on 3.14.9)
+# Starter pins (from the organizers' starter/requirements.txt)
+numpy==2.3.3
+pandas==2.3.3
+matplotlib==3.10.6
+# Additions
+pytest==9.2.0
+jupyterlab==4.6.6
