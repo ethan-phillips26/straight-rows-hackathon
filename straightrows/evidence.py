@@ -224,9 +224,17 @@ def _location_line(loc, sda, ep):
         inside = ("inside" if km <= x.semiMinor_km else "within the long axis of" if km <= x.semiMajor_km else "outside")
         cross = (f"{km:.1f} km from the {x['id']} centre, {inside} its {x.semiMajor_km:.1f} x {x.semiMinor_km:.1f} km ellipse "
                  f"(orientation not given); the fit is far more precise than the report")
+    boot = ""
+    if loc.get("boot_major_km") is not None:
+        boot = (f" An independent block bootstrap (100 refits, resampling 60-s blocks per tractor) gives a 95% ellipse of "
+                f"{loc['boot_major_km'] * 1000:.0f} x {loc['boot_minor_km'] * 1000:.0f} m (bearing "
+                f"{loc['boot_bearing_deg']:.0f} deg), "
+                + ("narrower than" if loc['boot_major_km'] <= loc['semi_major_km'] else "wider than")
+                + " the ellipse above (the bootstrap captures sampling noise only; the ellipse above also carries the "
+                "sensitivity shift).")
     return (f"Fitted jammer position {where}; {fit}. The ellipse is the fit's precision under the path-loss model "
             f"(statistical band {loc['stat_major_km'] * 1000:.0f} m + {loc['sensitivity_m']:.0f} m shift when refitting each half "
-            f"of the episode / dropping each tractor), not a surveyed truth; {cross}.")
+            f"of the episode / dropping each tractor), not a surveyed truth;{boot} {cross}.")
 
 
 def _spoofing(ep, minute, sda, others):

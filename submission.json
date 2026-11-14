@@ -1124,6 +1124,7 @@
         "S4 median 0.07 (max 0.08) is quiet -> the drop is not space weather. Advisory ADV-2026-118 (issued 2026-05-05 07:00Z) says storming was in progress, but an advisory does not say when it ends, so it is not used as the cause here; the S4 value decides.",
         "Reported position stays on the formation line (max offset 0.05 m) -> the loss is signal, not a displaced position.",
         "RFI report RFI-003 at 2026-05-06 02:38:59Z (during the episode): band L1, confidence 0.57, centre 1.8 km from the farm (ellipse 3.5 x 1.9 km), \"Possible intentional L1 interference detected by regional monitor; geolocation approximate.\" -> consistent with interference on this episode.",
+        "Fitted jammer position 46.9009N 97.1937W, 95% error ellipse 25 x 25 m (long axis bearing 90 deg); fit of C/N0 = a + b*log10(distance) to 719 10-s samples from all 3 tractors: RMSE 0.21 dB, b = 20.7 dB/decade (free space 20). The ellipse is the fit's precision under the path-loss model (statistical band 10 m + 10 m shift when refitting each half of the episode / dropping each tractor), not a surveyed truth; An independent block bootstrap (100 refits, resampling 60-s blocks per tractor) gives a 95% ellipse of 25 x 25 m (bearing 90 deg), narrower than the ellipse above (the bootstrap captures sampling noise only; the ellipse above also carries the sensitivity shift). 1.8 km from the RFI-003 centre, inside its 3.5 x 1.9 km ellipse (orientation not given); the fit is far more precise than the report.",
         "Confidence 0.90: base 0.85 for JAMMING (expert-set; each rule rests on 2-3 dev episodes, not a fitted model); +0.05 an RFI report within 60 min of the episode agrees."
       ]
     },
@@ -5347,6 +5348,7 @@
         "S4 median 0.07 (max 0.09) is quiet -> the drop is not space weather. Advisory ADV-2026-118 (issued 2026-05-05 07:00Z) says storming was in progress, but an advisory does not say when it ends, so it is not used as the cause here; the S4 value decides.",
         "Reported position stays on the formation line (max offset 0.05 m) -> the loss is signal, not a displaced position.",
         "No RFI report within 60 min of 2026-05-06 18:30Z to 2026-05-06 19:00Z (4 reports in the feed).",
+        "Fitted jammer position 46.9058N 97.2058W, 95% error ellipse 25 x 25 m (long axis bearing 108 deg); fit of C/N0 = a + b*log10(distance) to 513 10-s samples from all 3 tractors: RMSE 0.19 dB, b = 20.8 dB/decade (free space 20). The ellipse is the fit's precision under the path-loss model (statistical band 22 m + 0 m shift when refitting each half of the episode / dropping each tractor), not a surveyed truth; An independent block bootstrap (100 refits, resampling 60-s blocks per tractor) gives a 95% ellipse of 25 x 25 m (bearing 0 deg), narrower than the ellipse above (the bootstrap captures sampling noise only; the ellipse above also carries the sensitivity shift). no RFI report to cross-check.",
         "Confidence 0.75: base 0.85 for JAMMING (expert-set; each rule rests on 2-3 dev episodes, not a fitted model); -0.10 T2 only just above the 4.35 dB cut-off (one dev example supports the cut-off)."
       ]
     },

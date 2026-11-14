@@ -50,6 +50,29 @@ SIGNALS = [
 ]
 
 
+def explorer_fonts():
+    """make_viz.font_faces() (Hanken Grotesk, IBM Plex Mono) plus Newsreader, embedded the same way. A missing file is
+    skipped and the template's font stacks fall back to Georgia / system sans."""
+    f = Path(__file__).resolve().parent.parent / "demo" / "fonts" / "Newsreader.ttf"
+    css = font_faces()
+    if f.exists():
+        b64 = base64.b64encode(f.read_bytes()).decode()
+        css += (f"\n@font-face{{font-family:'Newsreader';src:url(data:font/ttf;base64,{b64}) format('truetype');"
+                f"font-weight:400 700;font-style:normal;font-display:swap}}")
+    return css
+
+
+def desired_tracks(tele, pitch=12.0):
+    """Desired-track (DTK) lanes: the tractors drive parallel north-south passes `pitch` m apart on one shared grid. The dataset has no
+    planned-path file, so recover the grid from working samples with a small cross-track error: its phase is the circular mean of
+    x mod pitch, its extent the lanes those samples span. Returns x0 (first lane, m east of origin), pitch, count and the y extent."""
+    ok = tele[(tele.speed_mps > 0) & (tele.cross_track_error_m < 0.5)]
+    ang = 2 * math.pi * ok.x_m.to_numpy() / pitch
+    phase = (math.atan2(np.sin(ang).mean(), np.cos(ang).mean()) % (2 * math.pi)) * pitch / (2 * math.pi)
+    k0, k1 = math.floor((ok.x_m.min() - phase) / pitch + .5), math.floor((ok.x_m.max() - phase) / pitch + .5)
+    return dict(x0=round(phase + k0 * pitch, 2), pitch=pitch, n=int(k1 - k0 + 1), y0=round(float(ok.y_m.min()), 1), y1=round(float(ok.y_m.max()), 1))
+
+
 def pack_telemetry(tele):
     tractors = sorted(tele.tractor_id.unique())
     blocks = []
@@ -133,13 +156,13 @@ def main():
         missing=MISSING, fix_names=fix_names,
         baseline={t: {k: v[0] for k, v in d.items()} for t, d in b.items()},
         sigma={t: {k: v[1] for k, v in d.items()} for t, d in b.items()}, dev_end=48 * 3600.0, sda=sda_bundle(load_sda(a.data)),
-        events=events, origin=[lat0, lon0],
+        events=events, origin=[lat0, lon0], lanes=desired_tracks(tele),
     )
     tmpl = Path(__file__).resolve().parent.parent / "viz" / "explorer_template.html"
     html = tmpl.read_text()
     html = html.replace("/*__BUNDLE__*/null", json.dumps(bundle, separators=(",", ":")))
     html = html.replace("/*__BLOB__*/", blob)
-    html = html.replace("/*__FONTS__*/", font_faces())
+    html = html.replace("/*__FONTS__*/", explorer_fonts())
     out = Path(a.outdir)
     out.mkdir(parents=True, exist_ok=True)
     (out / f"{a.name}.html").write_text(html)

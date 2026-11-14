@@ -56,3 +56,19 @@ def test_wrong_physics_is_flagged():
 
 def test_too_little_data_returns_none():
     assert locate.locate_jammer(_tele(46.9, -97.19).iloc[:50], START, END) is None
+
+
+def test_bootstrap_ellipse_is_a_deterministic_noise_only_check():
+    """The bootstrap measures sampling noise, not model bias, so it need not cover the truth (the main ellipse does,
+    see the first test); it must be well-formed, no wider than the main ellipse, and reproducible."""
+    src = locate.to_latlon(900.0, 700.0)
+    r = locate.locate_jammer(_tele(*src), START, END)
+    assert r["reliable"] and r["boot_major_km"] is not None
+    assert 0 < r["boot_minor_km"] <= r["boot_major_km"] <= r["semi_major_km"]
+    assert r["boot_centre_shift_m"] < 100
+    assert locate.locate_jammer(_tele(*src), START, END)["boot_major_km"] == r["boot_major_km"]
+
+
+def test_bootstrap_skipped_when_fit_is_not_reliable():
+    r = locate.locate_jammer(_tele(*locate.to_latlon(900.0, 700.0), noise=6.0), START, END)
+    assert r is None or r["boot_major_km"] is None

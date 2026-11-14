@@ -35,7 +35,7 @@ pytest -q                                        # unit tests (synthetic ones ne
 python scripts/eval_dev.py --detections X.json   # score against the 12 labeled dev episodes
 python scripts/eval_dev.py --baseline            # organizers' baseline on dev
 python scripts/verify_findings.py                # prints every number cited under "Data findings"
-python scripts/make_viz.py --events labels --pick TRN-03,TRN-06,TRN-05   # replay viewer
+make explorer                                    # current viewer -> viz/out/explorer.html
 ```
 
 ## Data findings (dev, hours 0-48; reproduced by `scripts/verify_findings.py`)
@@ -82,7 +82,7 @@ exemption wording; this is the least certain design decision.
 **Use of labels.** The 12 dev episodes (hours 0-48) were used to characterise signatures, set thresholds, and
 score with the organizers' matcher. No tuning on the evaluation window. Its unlabeled data is used for
 baselines (permitted). The detectors were also run on the evaluation day to look at the shapes of what they find
-(FINDINGS section 4, and the independent review in docs/REVIEW.md); no threshold or label was derived from that look.
+(local notes, not in this repo); no threshold or label was derived from that look.
 
 ## Results
 
@@ -94,8 +94,11 @@ Dev (12 episodes), organizers' diagnostic (max 40; ignores confidence and eviden
 | this entry | 40.00 | 1.000 | 1.000 |
 
 **This is not a held-out score.** The rules were read from these same 12 episodes, so 40/40 shows the rules describe them,
-not that they generalise. No leave-one-episode-out refit was done. An independent review (docs/REVIEW.md) found no rule
-that looks likely to cost an evaluation episode, and found four plausible variants dev never showed (fixed; see below).
+not that they generalise. A leave-one-episode-out check (`python scripts/loo_episodes.py`) re-derives each gap constant
+without one episode of its class: all 10 non-multipath episodes are still detected strictly, 0 false positives. Only the
+numbers are re-derived; the detector structure was designed having seen all 12, so this is a robustness check, not unseen-data
+validation. An independent review found no rule that looks likely to cost an evaluation episode, and found four plausible
+variants dev never showed (fixed; see Out of scope).
 Per-class precision/recall and onset errors: `python scripts/run_dev.py`.
 
 **Threshold sensitivity** (`python scripts/sweep_thresholds.py`, each constant x0.8 and x1.2, strict criterion: right class,
@@ -122,7 +125,7 @@ agrees with a jamming call. The last evidence line of every detection lists its 
 - RFI feed misses events and lags onset by 10-15 min; absence of a report is treated as no information.
 - Thresholds set on 12 episodes; likely overfit to them.
 
-**Out of scope / known limits** (docs/REVIEW.md items 2-4, 7):
+**Out of scope / known limits** (from the independent review):
 - Events shorter than the minimum durations are not reported: jamming < 24 min, spoofing < 10 min, equipment < 18 min.
   An 18-minute jam was verified to give no detection.
 - A link fault active in only ~4 % of working seconds is found about 18 minutes late (at 10 % it is exact).
@@ -142,25 +145,30 @@ agrees with a jamming call. The last evidence line of every detection lists its 
 - More labeled episodes, especially concurrent ones, for calibration.
 - Real (non-synthetic) farm telemetry.
 
-## Replay viewer
+## Data explorer (current viewer)
 
-`scripts/make_viz.py` builds a standalone HTML replay: tractor motion, signal charts, raw or residual
-(vs own baseline / vs fleet median, ±3σ MAD band), and the detection's class, action, confidence, evidence.
+`scripts/make_explorer.py` (or `make explorer`) builds the viewer to use: the whole 72 h of 1 Hz telemetry and SDA feeds in one
+offline HTML file, with dev labels and our detections as lanes. Click an event to replay it: top-down field with the tractors
+(cross-track error shown as a smoothed east-west bar, jammer fit when available), signal charts raw or as residuals, and the
+detection's class, action, confidence and evidence.
 
 ```bash
-python scripts/make_viz.py --events labels --pick TRN-03,TRN-06,TRN-05
-python scripts/make_viz.py --events submission.json --pick 1,2 --name final
+make explorer            # == python scripts/make_explorer.py --data starter/data --detections submission.json
 ```
 
-Output: `viz/out/<name>.html` (offline). Embeds dataset telemetry; gitignored, not part of the submission.
+Output: `viz/out/explorer.html` (offline, gitignored, not part of the submission).
+
+Past viewer: `scripts/make_viz.py` builds per-event replay clips (`viz/out/<name>.html`). It still runs but is no longer
+maintained or used for the demo; the explorer replaces it.
 
 ## Layout
 
 ```
 starter/        organizers' starter (fetcher, baseline, validator), unmodified
 straightrows/   load, features, detect, attribute, output
-scripts/        run_all.py, eval_dev.py, verify_findings.py, make_viz.py
+scripts/        run_all.py, eval_dev.py, verify_findings.py, loo_episodes.py, make_explorer.py (current viewer), make_viz.py (past viewer),
+                multipath_sidereal.py, xte_spoof_check.py (analysis)
 scoring/        organizers' scorer, unmodified
 tests/          pytest
-viz/            replay viewer template
+viz/            explorer_template.html (current), viewer_template.html (past)
 ```

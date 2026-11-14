@@ -15,7 +15,11 @@ Error has two parts, added together (conservative):
     (a tractor whose data is odd, a source that changed during the episode).
 A poor fit or an open-ended region is flagged ``reliable = False`` rather than reported as a location.
 
-Only numpy/pandas; deterministic (fixed grids, no RNG).
+A third, independent error estimate is a block bootstrap (``_bootstrap``): resample each tractor's 60 s blocks
+of C/N0 with replacement, refit, and take the spread of the refitted positions as a 95 % ellipse. It makes no
+noise-model assumption beyond "blocks are independent", so it is a check on the chi-square band, not a replacement.
+
+Only numpy/pandas; deterministic (fixed grids, bootstrap RNG seeded).
 """
 import numpy as np
 import pandas as pd
@@ -34,6 +38,9 @@ CHI2_95_2DOF = 5.99
 MAX_RMSE_DB = 2.0          # dev fits are <= 1 dB (FINDINGS section 3); the bad eval fits had 3-4 dB
 MIN_COVERAGE_M = 300.0     # tractors must spread over at least this much ground, or distances barely change
 MAX_RADIUS_M = 3000.0      # a region wider than this is not a location
+N_BOOT = 100               # bootstrap refits per episode
+BOOT_SEED = 20260506       # fixed so the submission is reproducible
+BOOT_HALF_M, BOOT_STEP_M = 750.0, 25.0    # refits search a local grid around the best fit (cheap; 61 x 61 cells)
 MIN_ERROR_M = 25.0         # reporting floor: 10 m grid cell plus the unknown near-field offset of the model
 
 
@@ -121,6 +128,45 @@ def _fit(g, duration_s):
             "slope": float(b[i]), "n": n, "edge": edge}
 
 
+def _bootstrap(g, best):
+    """Block-bootstrap 95 % ellipse of the source position.
+
+    Each replicate redraws, per tractor, as many 60 s blocks as it has, with replacement, and refits the
+    position on a local grid around ``best``. The 95 % ellipse is sqrt(chi2_95(2 dof)) standard deviations along the
+    principal axes of the replicate positions (exact for a Gaussian cloud). Returns None if fewer than half the
+    refits converge (the data do not pin a position down).
+    """
+    rng = np.random.default_rng(BOOT_SEED)
+    blk = ((g.bin - g.bin.min()).dt.total_seconds() // BLOCK_S).astype(int).to_numpy()
+    sx, sy, c, tr = g.x.to_numpy(), g.y.to_numpy(), g.c.to_numpy(), g.tractor_id.to_numpy()
+    groups = []                                           # per tractor: {block id -> sample indices}
+    for t in np.unique(tr):
+        idx = np.flatnonzero(tr == t)
+        groups.append({b: idx[blk[idx] == b] for b in np.unique(blk[idx])})
+    gx, gy = _grid(best["x"], best["y"], BOOT_HALF_M, BOOT_STEP_M)
+    pts = []
+    for _ in range(N_BOOT):
+        take = []
+        for grp in groups:
+            keys = list(grp)
+            take += [grp[keys[k]] for k in rng.integers(0, len(keys), len(keys))]
+        i = np.concatenate(take)
+        rss, _, _ = _rss_surface(sx[i], sy[i], c[i], gx, gy)
+        if np.isfinite(rss).any():
+            j = int(np.argmin(rss))
+            pts.append((gx[j], gy[j]))
+    if len(pts) < N_BOOT // 2:
+        return None
+    pts = np.array(pts)
+    evals, evecs = np.linalg.eigh(np.cov(pts.T))
+    k = np.sqrt(CHI2_95_2DOF * np.maximum(evals, 0.0))   # semi-axes, ascending
+    major = evecs[:, 1]
+    return {"major_m": float(max(k[1], BOOT_STEP_M)), "minor_m": float(max(k[0], BOOT_STEP_M)),
+            "bearing": float(np.degrees(np.arctan2(major[0], major[1])) % 180),
+            "centre_shift_m": float(np.hypot(*(pts.mean(0) - [best["x"], best["y"]]))),
+            "edge": bool(np.abs(pts - [best["x"], best["y"]]).max() >= BOOT_HALF_M - BOOT_STEP_M), "n": len(pts)}
+
+
 def locate_jammer(tele, start, end):
     """Fit one fixed source to the telemetry between ``start`` and ``end`` (UTC timestamps).
 
@@ -131,6 +177,7 @@ def locate_jammer(tele, start, end):
       lat, lon                      best position
       semi_major_km, semi_minor_km  95 % error ellipse (statistical + sensitivity), long axis bearing in degrees
       stat_major_km, sensitivity_m  the two parts of that error
+      boot_major_km, boot_minor_km, boot_bearing_deg   independent block-bootstrap 95 % ellipse (None if it failed)
       rmse_db, slope_db_per_decade  fit quality (dev: rmse <= 1, slope 19-23)
       reliable, notes               False + reasons if a trust gate failed (poor fit, little coverage, open region)
     """
@@ -162,11 +209,14 @@ def locate_jammer(tele, start, end):
         notes.append("tractors covered too little ground")
     if best["edge"] or not np.isfinite(major_m) or major_m > MAX_RADIUS_M:
         notes.append("error region not bounded")
+    boot = None if notes else _bootstrap(g, best)     # only worth 10 s for a fit we would report
     lat, lon = to_latlon(best["x"], best["y"])
     return {"lat": float(lat), "lon": float(lon),
             "semi_major_km": major_m / 1000, "semi_minor_km": minor_m / 1000,
             "major_axis_bearing_deg": best["bearing"], "stat_major_km": best["major_m"] / 1000,
             "sensitivity_m": float(sens), "rmse_db": best["rmse"], "slope_db_per_decade": best["slope"],
+            "boot_major_km": boot and boot["major_m"] / 1000, "boot_minor_km": boot and boot["minor_m"] / 1000,
+            "boot_bearing_deg": boot and boot["bearing"], "boot_centre_shift_m": boot and boot["centre_shift_m"],
             "n_samples": best["n"], "reliable": not notes, "notes": notes}
 
 

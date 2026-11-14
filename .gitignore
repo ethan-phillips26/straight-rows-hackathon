@@ -21,3 +21,6 @@ reports/
 
 # Generated demo replays (embed dataset telemetry; rebuild with scripts/make_viz.py)
 viz/out/
+
+# Generated demo figures and deck exports (embed dataset telemetry; rebuild with scripts/make_demo.py)
+demo/out/
