@@ -56,12 +56,22 @@ detected on residuals after removing the fleet-wide effect and reported as a sep
 
 <!-- Update to match the final code. -->
 
-1. `features.py`: 1 s features per tractor; baseline from that tractor's own quiet working time (median/MAD);
-   same signals relative to the fleet median (separates regional from local causes).
-2. `detect.py`: one independent detector per class, so a storm does not mask a jammer or machine fault.
-3. `attribute.py`: rule-based class assignment. Space-side feeds (Kp, Dst, S4, advisories, RFI) support or
-   rule out alternatives. Rules are kept to one-sentence each; 12 labeled episodes do not support a larger model.
-4. `output.py`: writes and validates `submission.json`; fails if detections > 495 (validator limit is 500).
+1. `features.py`: builds three tables from the telemetry and SDA feeds (`build_features`). A 1 Hz table has each tractor's
+   value minus the fleet median (separates regional from local causes), its C/N0 drop versus its own quiet baseline,
+   and `lon_dev_m`, the reported position's offset from the lockstep formation line (the spoofing signal). A 1-minute
+   table, with the north-headland seconds excluded, serves the slow causes (storm, jamming, spoofing, equipment) and
+   keeps worst-case columns so short dropouts are not averaged away. S4, Kp, Dst and the advisory flag are joined
+   as-of. A per-pass table (one row per tractor per north-headland pass) feeds multipath, since the 17 s dip would
+   vanish at 1-minute resolution. No labels or tuned thresholds are used.
+2. `detect.py`: one independent detector per class, so a storm does not mask a jammer or machine fault. A "storm" run
+   must also look like one (all three tractors alike, fleet on the S4 line); otherwise the drop is left to the jamming
+   detector. A spoof's lon offset must be backed by that tractor's own cross-track error, or the tractors whose XTE ramps
+   are blamed instead. Episodes are clipped to the evaluation window, not filtered on their start.
+3. `evidence.py`: writes the checkable strings. Every number is measured from the data (never typed in), and overlapping
+   causes are compared against neighbours, so a spoof inside a storm does not claim a "normal" receiver.
+4. `attribute.py`: class -> action, confidence (see below) and evidence. Space-side feeds (Kp, Dst, S4, advisories, RFI)
+   support or rule out alternatives. Rules are kept to one-sentence each; 12 labeled episodes do not support a larger model.
+5. `output.py`: writes and validates `submission.json`; fails if detections > 500 (the validator's limit; eval emits 493).
 
 **Multipath.** Scoring credits one representative multipath episode and exempts other recurrent ones from
 penalty unless they duplicate it. Dev shows the representative is an ordinary pass (not the first, tractor
@@ -72,28 +82,38 @@ exemption wording; this is the least certain design decision.
 
 **Use of labels.** The 12 dev episodes (hours 0-48) were used to characterise signatures, set thresholds, and
 score with the organizers' matcher. No tuning on the evaluation window. Its unlabeled data is used for
-baselines (permitted).
+baselines (permitted). The detectors were also run on the evaluation day to look at the shapes of what they find
+(FINDINGS section 4, and the independent review in docs/REVIEW.md); no threshold or label was derived from that look.
 
 ## Results
-
-<!-- TODO: fill from scripts/eval_dev.py. -->
 
 Dev (12 episodes), organizers' diagnostic (max 40; ignores confidence and evidence):
 
 | | diagnostic | macro-F1 | onset credit |
 |---|---|---|---|
 | organizers' baseline | 20.15 | 0.508 | 0.497 |
-| this entry | TODO | TODO | TODO |
+| this entry | 40.00 | 1.000 | 1.000 |
 
-TODO: per-class precision/recall, onset error per episode, ablation by feed, threshold sensitivity.
+**This is not a held-out score.** The rules were read from these same 12 episodes, so 40/40 shows the rules describe them,
+not that they generalise. No leave-one-episode-out refit was done. An independent review (docs/REVIEW.md) found no rule
+that looks likely to cost an evaluation episode, and found four plausible variants dev never showed (fixed; see below).
+Per-class precision/recall and onset errors: `python scripts/run_dev.py`.
+
+**Threshold sensitivity** (`python scripts/sweep_thresholds.py`, each constant x0.8 and x1.2, strict criterion: right class,
+exact tractor set, onset within 5 min, no false positive). All but one constant leave dev at 40.00 and strict-ok at both
+ends. The exception is the storm line `STORM_CN0_AT_S4_0` (42.7 dB): a percentage is the wrong unit, because 20 % is
+8.5 dB. In dB the dev result holds from -3.5 to +3.75 dB, against a measured residual of at most 0.53 dB on the three
+storm episodes (so about 6x). Earlier notes said "every threshold swept x0.8/x1.2: no change"; that was true for the
+diagnostic score only and is superseded by this paragraph.
 
 ## Confidence
 
-<!-- TODO: document the actual mapping and a dev reliability table. -->
-
-Derived from the number of independent agreeing signals and how fully alternatives are ruled out; reduced
-when evidence conflicts (e.g. jamming signature during an active storm). Dev has 12 episodes, so any
-calibration estimate has wide error.
+Expert-set, not fitted (`attribute.py`): each class starts from a base (storm 0.90, jamming 0.85, spoofing 0.90,
+equipment 0.80, multipath 0.90) and is lowered by named conditions: for example a jamming tractor within 2 dB of the
+4.35 dB cut-off (-0.10), jamming inside a storm (-0.10), a spoof whose cross-track error does not show the offset (-0.40),
+a multipath pass where not all three tractors dipped (-0.30). The only increase is +0.05 when an RFI report within an hour
+agrees with a jamming call. The last evidence line of every detection lists its adjustments. There is no reliability table:
+12 dev episodes cannot support one, and the dev result is in-sample.
 
 ## Failure modes
 
@@ -104,6 +124,18 @@ calibration estimate has wide error.
 - A real single-tractor headland dip is indistinguishable from a benign multipath pass.
 - RFI feed misses events and lags onset by 10-15 min; absence of a report is treated as no information.
 - Thresholds set on 12 episodes; likely overfit to them.
+
+**Out of scope / known limits** (docs/REVIEW.md items 2-4, 7):
+- Events shorter than the minimum durations are not reported: jamming < 24 min, spoofing < 10 min, equipment < 18 min.
+  An 18-minute jam was verified to give no detection.
+- A link fault active in only ~4 % of working seconds is found about 18 minutes late (at 10 % it is exact).
+- All three tractors spoofed by the same offset: the lockstep formation is preserved, so nothing is detected. Two spoofed
+  by the same offset are found through their cross-track error, with the lockstep offset only locating the episode.
+- A uniform three-tractor jam that happens to sit exactly on the S4-predicted storm line cannot be told from a storm
+  with farm data alone.
+- The storm line (C/N0 = 42.7 - 17.7 x S4) is fitted on two storms; its tolerance is about +-3.5 dB (see Results).
+- Lines to be ready to explain: the lockstep mode picking in `features.py`, the run-splitting idiom in `find_runs`, and the
+  600 s cap on the spoof onset back-extrapolation (comments in the code say why).
 
 ## Extra data that would help
 
