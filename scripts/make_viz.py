@@ -24,6 +24,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from straightrows.features import add_lockstep_offset
 from straightrows.load import load_labels, load_sda, load_telemetry
 
 PAD = pd.Timedelta("20min")
@@ -88,7 +89,7 @@ def build_clip(ev, tele, sda, b, origin):
         g = g.iloc[::step]
         tr[tid] = dict(
             x=r((g.lon - lon0) * kx, 1), y=r((g.lat - lat0) * ky, 1),
-            xte=r(g.cross_track_error_m, 3), cn0=r(g.mean_cn0_dbhz, 1), mincn0=r(g.min_cn0_dbhz, 1),
+            xte=r(g.cross_track_error_m, 3), londev=r(g.lon_dev_m, 2), cn0=r(g.mean_cn0_dbhz, 1), mincn0=r(g.min_cn0_dbhz, 1),
             sats=g.num_sats.astype(int).tolist(), fix=g.fix_rank.astype(int).tolist(),
             link=g.base_link_ok.astype(int).tolist(), speed=r(g.speed_mps, 1),
             r_cn0_own=r(g.r_cn0_own, 2), r_cn0_fleet=r(g.r_cn0_fleet, 2),
@@ -125,6 +126,7 @@ def main():
     tele = load_telemetry(a.data)
     sda = load_sda(a.data)
     b = baselines(tele)
+    tele = add_lockstep_offset(tele)  # lon_dev_m: reported east-west offset from the lockstep formation line
     tele = residual_cols(tele, b)
     events = load_events(a.events, a.data)
     if a.pick:
