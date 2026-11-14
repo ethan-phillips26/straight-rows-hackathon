@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Straight Rows Replay</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#171e26; --line:#2a3541; --text:#e6edf3; --mute:#8b98a5;
+    --t1:#4cc2ff; --t2:#ffb454; --t3:#b4e06a;
+    --SPACE_WEATHER:#c792ea; --JAMMING:#ff6b6b; --SPOOFING:#ff9f43; --EQUIPMENT_FAULT:#f7d154; --MULTIPATH:#6ee7c8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,sans-serif;height:100vh;display:flex;flex-direction:column}
+  header{display:flex;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  header h1{font-size:15px;margin:0 8px 0 0;font-weight:600}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+  .tab{background:var(--panel);border:1px solid var(--line);color:var(--text);padding:5px 10px;border-radius:6px;cursor:pointer;font:inherit}
+  .tab .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+  .tab.on{border-color:var(--text)}
+  main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(300px,38%) 1fr;gap:12px;padding:12px 16px}
+  .col{display:flex;flex-direction:column;gap:12px;min-height:0;min-width:0}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;min-height:0}
+  .panel h2{margin:0 0 6px;font-size:12px;font-weight:600;color:var(--mute);text-transform:uppercase;letter-spacing:.05em;display:flex;justify-content:space-between}
+  #field{flex:1;min-height:200px}
+  #fieldwrap{flex:1;display:flex;flex-direction:column}
+  canvas{width:100%;display:block}
+  #charts{flex:1;display:flex;flex-direction:column;gap:6px}
+  .ch{flex:1;min-height:0;position:relative}
+  .ch span{position:absolute;left:40px;top:2px;font-size:11px;color:var(--mute);pointer-events:none}
+  .ch canvas{height:100%;cursor:pointer}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .seg button{background:var(--panel);color:var(--mute);border:0;padding:4px 10px;cursor:pointer;font:inherit}
+  .seg button.on{background:var(--line);color:var(--text)}
+  button.play{background:var(--text);color:var(--bg);border:0;border-radius:6px;padding:6px 14px;font:inherit;font-weight:600;cursor:pointer}
+  input[type=range]{flex:1;min-width:160px}
+  select,label.file{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font:inherit;cursor:pointer}
+  #card{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:start}
+  #card .k{color:var(--mute)}
+  .badge{display:inline-block;padding:1px 8px;border-radius:10px;color:#0f1419;font-weight:600;font-size:12px}
+  .bar{height:8px;background:var(--line);border-radius:4px;width:140px;display:inline-block;vertical-align:middle;margin-right:8px}
+  .bar i{display:block;height:100%;border-radius:4px;background:var(--text)}
+  ul.ev{margin:0;padding-left:16px}
+  .mono{font-variant-numeric:tabular-nums}
+  .dim{color:var(--mute)}
+  @media (max-width:900px){main{grid-template-columns:1fr;overflow:auto}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Straight Rows · replay</h1>
+  <div class="tabs" id="tabs"></div>
+  <label class="file">Load bundle .json<input id="file" type="file" accept=".json" hidden></label>
+</header>
+<main>
+  <div class="col">
+    <div class="panel" id="fieldwrap">
+      <h2><span>Field (top-down, reported position)</span><span id="clock" class="mono"></span></h2>
+      <canvas id="field"></canvas>
+    </div>
+    <div class="panel" id="card"></div>
+  </div>
+  <div class="col">
+    <div class="panel row">
+      <button class="play" id="play">Pause</button>
+      <input id="seek" type="range" min="0" max="1000" value="0">
+      <select id="speed">
+        <option value="10">10x</option><option value="30" selected>30x</option>
+        <option value="60">60x</option><option value="120">120x</option><option value="300">300x</option>
+      </select>
+      <div class="seg" id="mode">
+        <button data-m="raw" class="on">Raw</button>
+        <button data-m="own">Residual vs own baseline</button>
+        <button data-m="fleet">Residual vs fleet</button>
+      </div>
+    </div>
+    <div class="panel" id="charts"></div>
+  </div>
+</main>
+
+<script>
+const BUNDLE = /*__BUNDLE__*/null;
+
+const TCOL = {T1:'#4cc2ff', T2:'#ffb454', T3:'#b4e06a'};
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const FIX = ['NO_FIX','AUTONOMOUS','DGPS','RTK_FLOAT','RTK_FIXED'];
+
+// Chart definitions. key = field in telemetry; res = base name of the residual fields; sig = key in bundle.sigma
+const CHARTS = [
+  {title:'Mean C/N0 (dB-Hz)', key:'cn0',  res:'r_cn0',  sig:'mean_cn0_dbhz', unit:'dB'},
+  {title:'|Cross-track error| (m)', key:'xte', res:'r_xte', sig:'axte', unit:'m', abs:true},
+  {title:'Satellites tracked', key:'sats', res:'r_sats', sig:'num_sats', unit:''},
+  {title:'S4 scintillation (fleet-wide, space-side)', key:null},
+];
+
+let B = BUNDLE, clip = null, t = 0, playing = true, mode = 'raw', last = 0;
+const $ = id => document.getElementById(id);
+const fieldC = $('field'), fctx = fieldC.getContext('2d');
+let chartEls = [];
+
+function init(){
+  if(!B){ document.body.innerHTML = '<p style="padding:20px">No data. Run scripts/make_viz.py or load a bundle .json.</p>' +
+    '<label class="file" style="margin:20px">Load bundle<input id="file" type="file" accept=".json" hidden></label>'; wireFile(); return; }
+  $('tabs').innerHTML = '';
+  B.clips.forEach((c,i)=>{
+    const b = document.createElement('button'); b.className='tab';
+    b.innerHTML = `<span class="dot" style="background:${css('--'+c.cls)}"></span>${c.id} <span class="dim">${c.cls.replace('_',' ').toLowerCase()}</span>`;
+    b.onclick = ()=>select(i); $('tabs').appendChild(b);
+  });
+  $('charts').innerHTML = '';
+  chartEls = CHARTS.map(def=>{
+    const d = document.createElement('div'); d.className='ch';
+    d.innerHTML = `<span></span><canvas></canvas>`; $('charts').appendChild(d);
+    const cv = d.querySelector('canvas');
+    cv.onclick = e => { const r = cv.getBoundingClientRect(); seekFrac((e.clientX - r.left - PADL) / (r.width - PADL - PADR)); };
+    return {def, cv, label:d.querySelector('span')};
+  });
+  select(0);
+}
+
+function select(i){
+  clip = B.clips[i]; t = 0; playing = true; $('play').textContent = 'Pause';
+  [...$('tabs').children].forEach((b,j)=>b.classList.toggle('on', i===j));
+  // clip length in seconds
+  clip.len = (clip.n - 1) * clip.step;
+  computeBounds(); renderCard();
+}
+
+function seekFrac(f){ t = Math.max(0, Math.min(1, f)) * clip.len; }
+
+function computeBounds(){
+  let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+  for(const id in clip.trk){ const k=clip.trk[id]; for(let i=0;i<k.x.length;i++){ x0=Math.min(x0,k.x[i]); x1=Math.max(x1,k.x[i]); y0=Math.min(y0,k.y[i]); y1=Math.max(y1,k.y[i]); } }
+  const m = 20; clip.bounds = {x0:x0-m,x1:x1+m,y0:y0-m,y1:y1+m};
+}
+
+function fit(cv){
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio||1;
+  const w = Math.round(r.width*dpr), h = Math.round(r.height*dpr);
+  if(cv.width!==w||cv.height!==h){ cv.width=w; cv.height=h; }
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx, w:r.width, h:r.height};
+}
+
+const idxNow = () => Math.min(clip.n-1, Math.floor(t / clip.step));
+const inEvent = () => t >= clip.ev_start && t <= clip.ev_end;
+
+// ---------- field ----------
+function drawField(){
+  const {ctx,w,h} = fit(fieldC); ctx.clearRect(0,0,w,h);
+  const b = clip.bounds, bw = b.x1-b.x0, bh = b.y1-b.y0;
+  const s = Math.min((w-20)/bw, (h-20)/bh), ox = (w - bw*s)/2, oy = (h - bh*s)/2;
+  const X = x => ox + (x-b.x0)*s, Y = y => h - (oy + (y-b.y0)*s);
+  const i = idxNow(), cls = css('--'+clip.cls), live = inEvent();
+  ctx.lineWidth = 1;
+  for(const id in clip.trk){
+    const k = clip.trk[id], col = TCOL[id];
+    // faint: whole path of the clip (shows the rows)
+    ctx.strokeStyle = col+'22'; ctx.beginPath();
+    for(let j=0;j<k.x.length;j+=Math.max(1,Math.floor(30/clip.step))) j?ctx.lineTo(X(k.x[j]),Y(k.y[j])):ctx.moveTo(X(k.x[j]),Y(k.y[j]));
+    ctx.stroke();
+    // bright trail: last 4 minutes
+    const from = Math.max(0, i - Math.ceil(240/clip.step));
+    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath();
+    for(let j=from;j<=i;j++) j===from?ctx.moveTo(X(k.x[j]),Y(k.y[j])):ctx.lineTo(X(k.x[j]),Y(k.y[j]));
+    ctx.stroke(); ctx.lineWidth = 1;
+    // tractor + xte halo (radius grows with |xte|: 1 m error = +10 px)
+    const px = X(k.x[i]), py = Y(k.y[i]), xte = Math.abs(k.xte[i] ?? 0);
+    const flagged = live && clip.tractors.includes(id);
+    if(flagged){ ctx.fillStyle = cls+'33'; ctx.beginPath(); ctx.arc(px,py,16+xte*10,0,7); ctx.fill(); }
+    ctx.strokeStyle = xte>1 ? '#ff5d5d' : col; ctx.setLineDash(xte>1?[4,3]:[]);
+    ctx.beginPath(); ctx.arc(px,py,7+xte*10,0,7); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = flagged ? cls : col; ctx.beginPath(); ctx.arc(px,py,5,0,7); ctx.fill();
+    ctx.fillStyle = col; ctx.font = '11px system-ui'; ctx.fillText(id, px+10, py-8);
+    // fixed legend (top-left) so labels never overlap
+    const row = Object.keys(clip.trk).indexOf(id);
+    const lab = `${id}  ${k.cn0[i] ?? '–'} dB-Hz  ${k.sats[i]} sv  XTE ${(k.xte[i] ?? 0).toFixed(2)} m  ${FIX[k.fix[i]]}` + (k.link[i]?'':'  · BASE LINK LOST');
+    ctx.fillText(lab, 8, 30 + row*14);
+  }
+  // north arrow + scale bar
+  ctx.fillStyle = css('--mute'); ctx.fillText('N ↑', 8, 14); ctx.fillText('halo radius grows with |XTE|; dashed red = over 1 m', 8, h-30);
+  const L = 100; ctx.fillRect(10, h-14, L*s, 2); ctx.fillText('100 m', 10, h-18);
+}
+
+// ---------- charts ----------
+const PADL = 34, PADR = 8;
+function series(def, id){
+  const k = clip.trk[id];
+  if(mode==='raw') return def.abs ? k[def.key].map(v=>v==null?null:Math.abs(v)) : k[def.key];
+  return k[`${def.res}_${mode}`];
+}
+function drawCharts(){
+  const i = idxNow();
+  for(const {def, cv, label} of chartEls){
+    const {ctx,w,h} = fit(cv); ctx.clearRect(0,0,w,h);
+    const pw = w-PADL-PADR, ph = h-8, X = tt => PADL + tt/clip.len*pw;
+    let lines = [], band = null;
+    if(def.key){
+      for(const id in clip.trk) lines.push({id, v: series(def,id), col:TCOL[id]});
+      if(mode!=='raw'){ const sg = B.sigma; const s = Math.max(...Object.keys(sg).map(t=>sg[t][def.sig])); band = 3*s; }
+      label.textContent = def.title + (mode==='raw' ? '' : `  — residual ${mode==='own'?'vs own baseline':'vs fleet median'}, shaded = ±3σ (robust)`);
+    } else {
+      label.textContent = def.title;
+    }
+    // y range
+    let lo=1e9, hi=-1e9;
+    if(def.key){ for(const l of lines) for(const v of l.v) if(v!=null){lo=Math.min(lo,v);hi=Math.max(hi,v);} if(band){lo=Math.min(lo,-band);hi=Math.max(hi,band);} }
+    else { for(const [,v] of clip.s4){lo=Math.min(lo,v);hi=Math.max(hi,v);} lo=0; hi=Math.max(hi,0.5); }
+    const pad = (hi-lo)*0.08||1; hi+=pad; lo = (def.key && mode==='raw' && lo>=0) ? Math.max(0, lo-pad) : lo-pad;
+    const Y = v => 4 + (1-(v-lo)/(hi-lo))*ph;
+    // event window
+    ctx.fillStyle = css('--'+clip.cls)+'22'; ctx.fillRect(X(clip.ev_start), 0, X(clip.ev_end)-X(clip.ev_start), h);
+    // axes
+    ctx.strokeStyle = css('--line'); ctx.fillStyle = css('--mute'); ctx.font='10px system-ui'; ctx.lineWidth=1;
+    for(let g=0; g<=3; g++){ const v = lo+(hi-lo)*g/3, y=Y(v); ctx.beginPath(); ctx.moveTo(PADL,y); ctx.lineTo(w-PADR,y); ctx.stroke(); ctx.fillText(v.toFixed(Math.abs(hi-lo)<5?2:0), 2, y+3); }
+    if(band){ ctx.fillStyle='#ffffff14'; ctx.fillRect(PADL, Y(band), pw, Y(-band)-Y(band)); }
+    if(def.key){
+      for(const l of lines){
+        ctx.strokeStyle = l.col; ctx.lineWidth = 1; ctx.beginPath(); let pen=false;
+        const stride = Math.max(1, Math.floor(l.v.length/ (pw*1.5)));
+        for(let j=0;j<l.v.length;j+=stride){ const v=l.v[j]; if(v==null){pen=false;continue;} const x=X(j*clip.step),y=Y(v); pen?ctx.lineTo(x,y):ctx.moveTo(x,y); pen=true; }
+        ctx.stroke();
+        const v = l.v[i]; if(v!=null){ ctx.fillStyle=l.col; ctx.beginPath(); ctx.arc(X(t),Y(v),3.5,0,7); ctx.fill(); }
+      }
+    } else {
+      ctx.strokeStyle = css('--SPACE_WEATHER'); ctx.lineWidth=1.6; ctx.beginPath();
+      clip.s4.forEach(([tt,v],j)=>{ j?ctx.lineTo(X(Math.max(0,tt)),Y(v)):ctx.moveTo(X(Math.max(0,tt)),Y(v)); }); ctx.stroke();
+      // advisories as ticks
+      ctx.fillStyle = css('--mute');
+      clip.adv.concat(clip.rfi.map(r=>({t:r.t,type:'RFI'}))).forEach(a=>{ if(a.t>=0&&a.t<=clip.len){ctx.fillRect(X(a.t)-1,h-12,2,10); ctx.fillText(a.type==='RFI'?'RFI':'ADV',X(a.t)+3,h-3);} });
+    }
+    // playhead
+    ctx.strokeStyle = css('--text'); ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(X(t),0); ctx.lineTo(X(t),h); ctx.stroke();
+  }
+}
+
+// ---------- card ----------
+function fmt(sec){ const d = new Date(new Date(clip.t0).getTime() + sec*1000); return d.toISOString().slice(11,19)+'Z'; }
+function step_at(arr, tt){ let v=null; for(const [a,b] of arr){ if(a<=tt) v=b; else break; } return v; }
+function renderCard(){
+  const c = clip, col = css('--'+c.cls);
+  const conf = c.confidence==null ? '<span class="dim">(dev label — no confidence)</span>'
+     : `<span class="bar"><i style="width:${c.confidence*100}%;background:${col}"></i></span>${(c.confidence*100).toFixed(0)}%`;
+  const ev = c.evidence.length ? `<ul class="ev">${c.evidence.map(e=>`<li>${e.replace(/</g,'&lt;')}</li>`).join('')}</ul>` : '<span class="dim">(none in this source)</span>';
+  $('card').innerHTML = `
+    <div class="k">Event</div><div><b>${c.id}</b> &nbsp;<span class="badge" style="background:${col}">${c.cls}</span> &nbsp;${c.tractors.join(', ')}</div>
+    <div class="k">Window</div><div class="mono">${fmt(c.ev_start)} – ${fmt(c.ev_end)}</div>
+    <div class="k">Action</div><div>${c.action}</div>
+    <div class="k">Confidence</div><div>${conf}</div>
+    <div class="k">Evidence</div><div>${ev}</div>
+    <div class="k">Space-side now</div><div class="mono" id="sda"></div>`;
+}
+function updateLive(){
+  $('clock').textContent = fmt(t) + (inEvent() ? '  ● in event' : '');
+  const s4 = step_at(clip.s4, t), kp = step_at(clip.kp, t);
+  const el = $('sda'); if(el) el.textContent = `S4 ${s4==null?'–':s4.toFixed(2)}   Kp ${kp==null?'–':kp.toFixed(1)}` +
+     clip.rfi.filter(r=>r.t<=t).map(r=>`   RFI report @${fmt(r.t)}`).join('');
+  $('seek').value = Math.round(t/clip.len*1000);
+}
+
+// ---------- loop & controls ----------
+function frame(now){
+  if(clip){
+    const dt = Math.min(0.1, (now-last)/1000); last = now;
+    if(playing){ t += dt * +$('speed').value; if(t>=clip.len){ t = clip.len; playing=false; $('play').textContent='Replay'; } }
+    drawField(); drawCharts(); updateLive();
+  }
+  requestAnimationFrame(frame);
+}
+$('play').onclick = () => { if(t>=clip.len) t=0; playing = !playing; $('play').textContent = playing?'Pause':'Play'; };
+$('seek').oninput = e => seekFrac(e.target.value/1000);
+$('mode').onclick = e => { const m = e.target.dataset.m; if(!m) return; mode = m; [...$('mode').children].forEach(b=>b.classList.toggle('on', b.dataset.m===m)); };
+document.addEventListener('keydown', e=>{
+  if(!clip) return;
+  if(e.code==='Space'){ e.preventDefault(); $('play').click(); }
+  if(e.key==='ArrowRight') t = Math.min(clip.len, t+30);
+  if(e.key==='ArrowLeft') t = Math.max(0, t-30);
+  if(e.key==='r') $('mode').children[mode==='raw'?1:0].click();
+  const n = +e.key; if(n>=1 && n<=B.clips.length) select(n-1);
+});
+function wireFile(){
+  $('file').onchange = async e => { B = JSON.parse(await e.target.files[0].text()); location.hash=''; init(); };
+}
+wireFile(); init(); requestAnimationFrame(t0=>{ last=t0; frame(t0); });
+</script>
+</body>
+</html>

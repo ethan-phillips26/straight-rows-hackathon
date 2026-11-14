@@ -18,3 +18,6 @@ __pycache__/
 
 # Generated plots/reports
 reports/
+
+# Generated demo replays (embed dataset telemetry; rebuild with scripts/make_viz.py)
+viz/out/
