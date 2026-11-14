@@ -24,6 +24,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from straightrows import locate
 from straightrows.features import add_lockstep_offset
 from straightrows.load import load_labels, load_sda, load_telemetry
 
@@ -102,16 +103,44 @@ def build_clip(ev, tele, sda, b, origin):
         d = df[(df.ts >= lo) & (df.ts <= t1)]
         return [[(x - ts0).total_seconds(), round(float(v), 3)] for x, v in zip(d.ts, d[col])]
 
+    jam = None
+    if ev["cls"] == "JAMMING":  # fitted source position + error ellipse (straightrows/locate.py), in the viewer's metre frame
+        f = locate.locate_jammer(tele, ev["start"], ev["end"])
+        if f:
+            jam = dict(x=round((f["lon"] - lon0) * kx, 1), y=round((f["lat"] - lat0) * ky, 1), lat=f["lat"], lon=f["lon"],
+                       a_m=round(f["semi_major_km"] * 1000), b_m=round(f["semi_minor_km"] * 1000),
+                       bearing=round(f["major_axis_bearing_deg"]), rmse=round(f["rmse_db"], 2),
+                       slope=round(f["slope_db_per_decade"], 1), reliable=f["reliable"], notes=f["notes"])
     rfi = sda["rfi"][(sda["rfi"].ts >= t0) & (sda["rfi"].ts <= t1)]
     adv = sda["advisories"][(sda["advisories"].ts >= t0 - pd.Timedelta("6h")) & (sda["advisories"].ts <= t1)]
     return dict(
         id=ev["id"], cls=ev["cls"], action=ev["action"], confidence=ev["confidence"], evidence=ev["evidence"],
-        tractors=ev["tractors"], t0=ts0.isoformat(), step=step, n=len(next(iter(tr.values()))["x"]),
+        tractors=ev["tractors"], jam=jam, origin=[lat0, lon0], t0=ts0.isoformat(), step=step, n=len(next(iter(tr.values()))["x"]),
         ev_start=(ev["start"] - ts0).total_seconds(), ev_end=(ev["end"] - ts0).total_seconds(),
-        trk=tr, s4=win(sda["s4"], "s4"), kp=win(sda["kp"], "kp"),
-        rfi=[dict(t=(x.ts - ts0).total_seconds(), text=x.text, conf=float(x.confidence)) for x in rfi.itertuples()],
-        adv=[dict(t=(x.ts - ts0).total_seconds(), type=x.type, text=x.text) for x in adv.itertuples()],
+        trk=tr, s4=win(sda["s4"], "s4"), kp=win(sda["kp"], "kp"), dst=win(sda["dst"], "dst_nT"),
+        # full SDA detail so the viewer can show what the evidence strings cite
+        rfi=[dict(t=(x.ts - ts0).total_seconds(), id=x.id, band=x.band, text=x.text, conf=float(x.confidence),
+                  lat=float(x.centerLat), lon=float(x.centerLon),
+                  a_km=float(x.semiMajor_km), b_km=float(x.semiMinor_km)) for x in rfi.itertuples()],
+        adv=[dict(t=(x.ts - ts0).total_seconds(), id=x.id, type=x.type, svn=x.svn, text=x.text) for x in adv.itertuples()],
     )
+
+
+def font_faces():
+    """Embed the deck's fonts (demo/fonts) as base64 so the viewer stays one self-contained file.
+    If the folder is missing the viewer falls back to system fonts."""
+    import base64
+    d = Path(__file__).resolve().parent.parent / "demo" / "fonts"
+    spec = [("Hanken Grotesk", "HankenGrotesk.ttf", "100 900", "normal"),
+            ("IBM Plex Mono", "IBMPlexMono-Regular.ttf", "400", "normal"),
+            ("IBM Plex Mono", "IBMPlexMono-Medium.ttf", "500 700", "normal")]
+    css = []
+    for fam, f, wt, st in spec:
+        if (d / f).exists():
+            b64 = base64.b64encode((d / f).read_bytes()).decode()
+            css.append(f"@font-face{{font-family:'{fam}';src:url(data:font/ttf;base64,{b64}) format('truetype');"
+                       f"font-weight:{wt};font-style:{st};font-display:swap}}")
+    return "\n".join(css)
 
 
 def main():
@@ -119,6 +148,9 @@ def main():
     ap.add_argument("--data", default="starter/data")
     ap.add_argument("--events", default="labels")
     ap.add_argument("--pick", default="")
+    ap.add_argument("--mp-sample", type=int, default=None,
+                    help="with no --pick: keep every non-multipath event plus N evenly spaced multipath ones "
+                         "(486 multipath clips would be huge; the viewer shows the true totals)")
     ap.add_argument("--name", default="demo")
     ap.add_argument("--outdir", default="viz/out")
     a = ap.parse_args()
@@ -134,14 +166,22 @@ def main():
         want = [w if not w.isdigit() or a.events == "labels" else f"D{w}" for w in want]
         events = [e for e in events if e["id"] in want]
         events.sort(key=lambda e: want.index(e["id"]))
+    totals = {}
+    for e in load_events(a.events, a.data):
+        totals[e["cls"]] = totals.get(e["cls"], 0) + 1
+    if a.mp_sample is not None and not a.pick:
+        mp = [e for e in events if e["cls"] == "MULTIPATH"]
+        keep = {e["id"] for e in mp[:: max(1, len(mp) // max(1, a.mp_sample))][: a.mp_sample]}
+        events = [e for e in events if e["cls"] != "MULTIPATH" or e["id"] in keep]
     origin = (float(tele.lat.mean()), float(tele.lon.mean()))
     bundle = dict(
-        source=a.events, sigma={t: {k: v[1] for k, v in d.items()} for t, d in b.items()},
+        source=a.events, totals=totals, sigma={t: {k: v[1] for k, v in d.items()} for t, d in b.items()},
         baseline={t: {k: v[0] for k, v in d.items()} for t, d in b.items()},
         clips=[build_clip(e, tele, sda, b, origin) for e in events],
     )
     tmpl = Path(__file__).resolve().parent.parent / "viz" / "viewer_template.html"
     html = tmpl.read_text().replace("/*__BUNDLE__*/null", json.dumps(bundle, separators=(",", ":")))
+    html = html.replace("/*__FONTS__*/", font_faces())
     out = Path(a.outdir)
     out.mkdir(parents=True, exist_ok=True)
     (out / f"{a.name}.html").write_text(html)

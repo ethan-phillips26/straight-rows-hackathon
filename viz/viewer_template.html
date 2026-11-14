@@ -5,127 +5,163 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Straight Rows Replay</title>
 <style>
+/*__FONTS__*/
+  /* World: the deck's paper-and-ink survey sheet. Ground is warm paper, text is ink, class and tractor
+     colours match demo/style.py so the viewer and the slides read as one document. */
   :root{
-    color-scheme:dark;
-    --bg:#0b1117; --panel:#111a22; --raise:#17222c; --line:#223140; --line2:#2f4254;
-    --text:#e9eff5; --mute:#97a8b8; --faint:#7f94a6;
-    --t1:#4cc2ff; --t2:#ffb454; --t3:#b4e06a;
-    --SPACE_WEATHER:#c792ea; --JAMMING:#ff6b6b; --SPOOFING:#ff9f43; --EQUIPMENT_FAULT:#f7d154; --MULTIPATH:#6ee7c8;
-    --accent:#e9eff5;
-    --ui:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
-    --data:"JetBrains Mono","IBM Plex Mono","SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    color-scheme:light;
+    --bg:#e3e5e4; --panel:#f8f7f3; --raise:#efece5; --line:#dddad2; --line2:#c4c0b4;
+    --text:#17181b; --mute:#5f6168; --faint:#6f7177;
+    --t1:#2a78d6; --t2:#d9531c; --t3:#138a5f;
+    --SPACE_WEATHER:#eda100; --JAMMING:#e34948; --SPOOFING:#6250d6; --EQUIPMENT_FAULT:#e87ba4; --MULTIPATH:#008300;
+    --sw-ink:#a86f00; --bad:#b3261e;
+    --accent:#17181b;
+    --ui:"Hanken Grotesk","Segoe UI",system-ui,sans-serif;
+    --data:"IBM Plex Mono","SF Mono",ui-monospace,Menlo,Consolas,monospace;
     --ease:cubic-bezier(.16,1,.3,1);
   }
   *{box-sizing:border-box}
-  ::selection{background:color-mix(in srgb,var(--accent) 40%,transparent);color:#fff}
+  ::selection{background:#17181b;color:#f8f7f3}
   html{scrollbar-color:var(--line2) transparent;scrollbar-width:thin}
-  ::-webkit-scrollbar{width:8px;height:8px} ::-webkit-scrollbar-thumb{background:var(--line2);border-radius:4px} ::-webkit-scrollbar-track{background:transparent}
-  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 var(--ui);height:100vh;display:flex;flex-direction:column;
-       font-feature-settings:"tnum" 1,"cv11" 1;-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:9px;height:9px} ::-webkit-scrollbar-thumb{background:var(--line2);border-radius:5px;border:2px solid var(--panel)} ::-webkit-scrollbar-track{background:transparent}
+  body{margin:0;background:var(--bg);color:var(--text);font:16.5px/1.45 var(--ui);height:100vh;display:flex;flex-direction:column;
+       font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased}
   button,select,label.file,input{font:inherit}
-  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+  :focus-visible{outline:2px solid var(--text);outline-offset:2px;border-radius:4px}
+  .lbl{display:block;color:var(--mute);font-size:13.5px;font-weight:600;letter-spacing:.02em;margin-bottom:3px}
+  .dim{color:var(--mute)}
 
-  /* header */
-  header{display:flex;gap:20px;align-items:center;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--bg)}
-  .brand{display:flex;align-items:baseline;gap:10px;white-space:nowrap}
-  .brand b{font-size:17px;font-weight:650;letter-spacing:-.01em}
-  .brand span{color:var(--mute);font-size:13px}
-  .tabs{display:flex;gap:6px;flex:1;flex-wrap:wrap}
-  .tab{display:flex;align-items:center;gap:8px;background:transparent;border:1px solid var(--line);color:var(--mute);padding:6px 12px;border-radius:8px;cursor:pointer;transition:background .15s,color .15s,border-color .15s}
-  .tab:hover{background:var(--raise);color:var(--text)}
-  .tab .dot{width:9px;height:9px;border-radius:50%;flex:none}
-  .tab .nm{font-family:var(--data);font-size:13px;color:var(--text)}
-  .tab .cl{font-size:13px;text-transform:lowercase}
-  .tab.on{background:var(--raise);border-color:var(--line2);color:var(--text)}
-  label.file{color:var(--faint);font-size:13px;cursor:pointer;padding:6px 10px;border-radius:8px;border:1px solid transparent}
-  label.file:hover{color:var(--mute);border-color:var(--line)}
+  /* header: a title block, nothing else */
+  header{display:flex;gap:20px;align-items:baseline;padding:14px 22px 10px}
+  .brand{display:flex;align-items:baseline;gap:12px;white-space:nowrap}
+  .brand b{font-size:22px;font-weight:750;letter-spacing:-.025em}
+  .brand span{color:var(--mute);font-size:14.5px}
+  .grow{flex:1}
+  label.file{color:var(--mute);font-size:14.5px;cursor:pointer;padding:4px 10px;border-radius:5px;border:1px solid var(--line2)}
+  label.file:hover{color:var(--text);border-color:var(--text)}
 
-  /* layout */
-  main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(340px,40%) 1fr;gap:14px;padding:14px 20px 18px}
-  .col{display:flex;flex-direction:column;gap:14px;min-height:0;min-width:0}
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-height:0}
-  .phead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:0 0 8px}
-  .phead h2{margin:0;font-size:14px;font-weight:600;letter-spacing:0}
-  .phead .sub{color:var(--mute);font-size:12.5px;font-weight:400;margin-left:8px}
+  /* layout: three sheets on the table */
+  main{flex:1;min-height:0;display:grid;grid-template-columns:288px minmax(340px,32%) 1fr;gap:12px;padding:4px 22px 18px}
+  .col{display:flex;flex-direction:column;gap:12px;min-height:0;min-width:0}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;min-height:0}
+  .phead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:0 0 10px}
+  .phead h2{margin:0;font-size:16.5px;font-weight:700;letter-spacing:-.005em}
+  .phead .sub{color:var(--mute);font-family:var(--ui);font-size:14px;font-weight:400;margin-left:8px}
   canvas{width:100%;display:block}
 
+  /* detections sidebar: a ruled log, not a stack of cards */
+  .side{display:flex;flex-direction:column;gap:10px;padding:14px 0 6px}
+  .side .phead{margin:0 16px}
+  .tabs{display:flex;gap:4px 14px;flex-wrap:wrap;padding:0 16px 8px;border-bottom:1px solid var(--line)}
+  .tab{display:flex;align-items:center;gap:6px;background:transparent;border:0;border-bottom:2px solid transparent;color:var(--mute);padding:2px 0 3px;cursor:pointer;font-size:14.5px;transition:color .15s,border-color .15s}
+  .tab:hover{color:var(--text)}
+  .tab .dot{width:8px;height:8px;border-radius:2px;flex:none}
+  .tab .cl{text-transform:capitalize;font-weight:500}
+  .tab .n{font-family:var(--data);font-size:13px;color:var(--faint)}
+  .tab.on{color:var(--text);border-bottom-color:var(--text)} .tab.on .cl{font-weight:650}
+  #evlist{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column}
+  .ev{--c:var(--faint);display:grid;grid-template-columns:10px 1fr auto;grid-template-areas:"mk cl id" ". tch tm";gap:1px 10px;align-items:baseline;padding:9px 16px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--text);text-align:left;width:100%;cursor:pointer;transition:background .15s}
+  .ev:hover{background:var(--raise)} .ev.on{background:#17181b0d;box-shadow:inset 0 0 0 1px var(--text)}
+  .ev .mk{grid-area:mk;width:9px;height:9px;border-radius:2px;background:var(--c);align-self:center}
+  .ev .cl{grid-area:cl;font-weight:650;font-size:15.5px;text-transform:capitalize}
+  .ev .id{grid-area:id;font-family:var(--data);font-size:13px;color:var(--mute)}
+  .ev .tch{grid-area:tch;font-family:var(--data);font-size:13.5px;font-weight:500;display:flex;gap:7px}
+  .ev .tm{grid-area:tm;font-family:var(--data);font-size:13px;color:var(--mute);text-align:right}
+  .ev .cf{font-weight:650;color:var(--text)}
+  .ev.grp{grid-template-areas:"mk cl id" ". note note";background:var(--raise)}
+  .ev.grp .note{grid-area:note;color:var(--mute);font-size:14px;line-height:1.4}
+  .ev.grp .chev{width:10px;height:10px;display:inline-block;vertical-align:-1px;margin-right:5px}
+  .ev.sub{padding-left:30px;background:var(--panel)} .ev.sub:hover{background:var(--raise)} .ev.sub.on{background:#17181b0d}
+
   /* field */
-  #fieldwrap{flex:1.25;display:flex;flex-direction:column}
+  #fieldwrap{flex:1;display:flex;flex-direction:column}
   #fieldbody{flex:1;min-height:0;display:flex;gap:14px}
   #field{flex:1;min-width:0;height:100%}
-  #clock{font-family:var(--data);font-size:14px;color:var(--text);display:flex;align-items:center;gap:8px}
-  #clock .live{width:8px;height:8px;border-radius:50%;background:var(--faint)}
+  #clock{font-family:var(--data);font-size:15px;color:var(--text);display:flex;align-items:center;gap:8px}
+  #clock .live{width:8px;height:8px;border-radius:50%;background:var(--line2)}
   #clock.on .live{background:var(--accent);animation:pulse 1.6s ease-in-out infinite}
-  @keyframes pulse{50%{opacity:.35}}
-  #tcol{flex:0 0 188px;display:flex;flex-direction:column;justify-content:center;gap:10px}
-  #tstat{display:flex;flex-direction:column;gap:10px}
-  .foot{margin:0;color:var(--faint);font-size:12px;line-height:1.4}
-  .tr{display:grid;grid-template-columns:auto 1fr;grid-template-areas:"id fix" "cn0 cn0" "sv xte";gap:2px 10px;padding:9px 11px;border-radius:9px;border:1px solid var(--line);font-family:var(--data);font-size:12.5px;color:var(--mute)}
-  .tr>:nth-child(1){grid-area:id} .tr>:nth-child(2){grid-area:cn0;color:var(--text);font-size:14px} .tr>:nth-child(3){grid-area:sv} .tr>:nth-child(4){grid-area:xte;text-align:right} .tr>:nth-child(5){grid-area:fix;text-align:right;font-size:11.5px}
-  .tr.hit{border-color:color-mix(in srgb,var(--accent) 55%,transparent);background:color-mix(in srgb,var(--accent) 11%,transparent);color:var(--text)}
-  .tr b{font-family:var(--ui);font-weight:650;font-size:13px}
-    .tr .warn{color:#ff8f8f}
-  .chip{display:inline-block;padding:0 7px;border-radius:5px;font-family:var(--ui);font-size:12px;font-weight:600;background:#ff5d5d22;color:#ff8f8f;margin-left:6px}
+  @keyframes pulse{50%{opacity:.3}}
+  #tcol{flex:0 0 184px;display:flex;flex-direction:column;justify-content:center;gap:10px}
+  #tstat{display:flex;flex-direction:column}
+  .foot{margin:0;color:var(--mute);font-size:13.5px;line-height:1.4}
+  .tr{display:grid;grid-template-columns:auto 1fr;grid-template-areas:"id fix" "cn0 cn0" "sv xte";gap:1px 10px;padding:8px 8px;border-top:1px solid var(--line);font-family:var(--data);font-size:13.5px;color:var(--mute)}
+  .tr:first-child{border-top:0}
+  .tr>:nth-child(1){grid-area:id} .tr>:nth-child(2){grid-area:cn0;color:var(--text);font-size:15.5px;font-weight:500} .tr>:nth-child(3){grid-area:sv} .tr>:nth-child(4){grid-area:xte;text-align:right} .tr>:nth-child(5){grid-area:fix;text-align:right;font-size:12.5px}
+  .tr.hit{background:color-mix(in srgb,var(--accent) 9%,transparent);color:var(--text)}
+  .tr b{font-family:var(--ui);font-weight:700;font-size:15px}
+  .tr .warn{color:var(--bad);font-weight:600}
+  .chip{display:inline-block;padding:0 6px;border-radius:3px;font-family:var(--ui);font-size:12.5px;font-weight:700;background:var(--bad);color:#fff;margin-left:6px;letter-spacing:.02em}
 
-  /* card */
-  #card{flex:1;overflow:auto;display:flex;flex-direction:column;gap:12px}
+  /* detection card */
+  #card{flex:1.8;overflow:auto;display:flex;flex-direction:column;gap:14px}
   #card>*{flex-shrink:0}
   #card.fresh>*{animation:rise .42s var(--ease) both} #card.fresh>*:nth-child(2){animation-delay:.04s} #card.fresh>*:nth-child(3){animation-delay:.08s}
   #card.fresh>*:nth-child(4){animation-delay:.12s} #card.fresh>*:nth-child(5){animation-delay:.16s}
-  @keyframes rise{from{opacity:0;transform:translateY(8px)}}
-  .ctop{display:flex;align-items:center;justify-content:space-between;gap:12px}
-  .cls{display:flex;align-items:center;gap:10px;font-size:22px;font-weight:700;letter-spacing:-.015em;color:var(--accent)}
-  .cls i{width:12px;height:12px;border-radius:50%;background:var(--accent);flex:none}
-  .cid{font-family:var(--data);font-size:13px;color:var(--mute)}
-  .meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;color:var(--mute);font-size:13.5px}
-  .tch{font-family:var(--data);font-size:12.5px;font-weight:600;padding:2px 9px;border-radius:999px;border:1px solid currentColor}
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}}
+  .ctop{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+  .cls{display:flex;align-items:center;gap:10px;font-size:26px;font-weight:750;line-height:1.1;letter-spacing:-.025em;text-transform:capitalize}
+  .cls i{width:13px;height:13px;border-radius:3px;background:var(--accent);flex:none;align-self:center}
+  .cid{font-family:var(--data);font-size:14px;color:var(--mute)}
+  .meta{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;color:var(--mute);font-size:15px}
+  .tch{font-family:var(--data);font-size:14.5px;font-weight:600}
   .when{font-family:var(--data);color:var(--text)}
-  .action{border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);background:color-mix(in srgb,var(--accent) 10%,transparent);border-radius:10px;padding:10px 14px}
-  .lbl{display:block;color:var(--mute);font-size:12.5px;margin-bottom:2px}
-  .action b{font-size:16px;font-weight:650;letter-spacing:.01em}
+  .action{padding:10px 0;border-top:1px solid var(--line2);border-bottom:1px solid var(--line)}
+  .action b{font-size:17.5px;font-weight:700;letter-spacing:.01em}
   .conf{display:flex;align-items:center;gap:14px}
   .conf .lbl{margin:0;min-width:86px}
-  .bar{flex:1;max-width:240px;height:8px;background:var(--line);border-radius:4px;overflow:hidden}
-  .bar i{display:block;height:100%;border-radius:4px;background:var(--accent);transform-origin:left;animation:grow .7s var(--ease) both}
+  .bar{flex:1;max-width:240px;height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--text);transform-origin:left;animation:grow .7s var(--ease) both}
   @keyframes grow{from{transform:scaleX(0)}}
-  .pct{font-family:var(--data);font-size:15px;font-weight:600}
+  .pct{font-family:var(--data);font-size:16.5px;font-weight:600}
+  .verdict{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end;padding:8px 0;border-top:1px solid var(--line2);border-bottom:1px solid var(--line)}
+  .verdict b{font-size:18px;font-weight:700;letter-spacing:.01em}
+  button.ts{font-family:var(--data);font-size:inherit;background:transparent;color:#1f66c1;border:0;border-bottom:1px solid currentColor;padding:0;cursor:pointer}
+  button.ts:hover{background:#1f66c11a}
+  .ruled{display:inline-block;font-size:12.5px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;border:1px solid var(--text);border-radius:3px;padding:0 5px;margin-right:8px;vertical-align:1px}
+  .concl{font-weight:600}
+  details.src{border-top:1px solid var(--line);padding-top:8px} details.src summary{cursor:pointer;color:var(--mute);font-size:14px;font-weight:600} details.src[open] summary{margin-bottom:6px}
   .evid{min-height:0}
   .evid ul{margin:6px 0 0;padding:0;list-style:none;display:grid;gap:8px}
-  .evid li{font-size:13.5px;line-height:1.5;color:var(--text);padding-top:8px;border-top:1px solid var(--line);max-width:68ch}
+  .evid li{font-size:17px;line-height:1.55;padding-top:8px;border-top:1px solid var(--line);max-width:68ch}
   .evid li:first-child{border-top:0;padding-top:0}
-  .space{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;color:var(--mute);font-size:13px;padding-top:10px;border-top:1px solid var(--line)}
+  .space{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;color:var(--mute);font-size:14.5px;padding-top:10px;border-top:1px solid var(--line)}
   .space .v{font-family:var(--data);color:var(--text)}
-  .dim{color:var(--mute)}
+  .sdad{padding-top:10px;border-top:1px solid var(--line);font-size:14.5px} .sdad p{margin:7px 0 0;line-height:1.45;max-width:68ch}
 
   /* transport */
   .transport{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:10px 16px}
-  button.play{display:flex;align-items:center;gap:8px;background:var(--text);color:var(--bg);border:0;border-radius:8px;padding:7px 16px 7px 12px;font-weight:650;cursor:pointer;min-width:98px;transition:transform .12s}
+  button.play{display:flex;align-items:center;gap:8px;background:var(--text);color:var(--panel);border:0;border-radius:5px;padding:7px 16px 7px 12px;font-weight:700;cursor:pointer;min-width:98px;transition:transform .12s}
   button.play:active{transform:scale(.97)} button.play svg{width:16px;height:16px;fill:currentColor}
   input[type=range]{flex:1;min-width:160px;-webkit-appearance:none;appearance:none;height:22px;background:transparent;cursor:pointer}
-  input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:linear-gradient(90deg,var(--accent) var(--p,0%),var(--line) var(--p,0%))}
-  input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--line)} input[type=range]::-moz-range-progress{height:6px;border-radius:3px;background:var(--accent)}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;margin-top:-5px;border-radius:50%;background:#fff;border:3px solid var(--accent);box-shadow:0 1px 4px #0008}
-  input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#fff;border:3px solid var(--accent)}
-  select{background:var(--raise);color:var(--text);border:1px solid var(--line2);border-radius:8px;padding:6px 10px;cursor:pointer}
-  .seg{display:inline-flex;border:1px solid var(--line2);border-radius:8px;overflow:hidden}
-  .seg button{background:transparent;color:var(--mute);border:0;padding:6px 12px;cursor:pointer;font-size:13.5px;transition:background .15s,color .15s}
-  .seg button:hover{color:var(--text)} .seg button.on{background:var(--raise);color:var(--text);font-weight:600}
+  input[type=range]::-webkit-slider-runnable-track{height:5px;border-radius:3px;background:linear-gradient(90deg,var(--accent) var(--p,0%),var(--line) var(--p,0%))}
+  input[type=range]::-moz-range-track{height:5px;border-radius:3px;background:var(--line)} input[type=range]::-moz-range-progress{height:5px;border-radius:3px;background:var(--accent)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;margin-top:-5.5px;border-radius:50%;background:var(--panel);border:3px solid var(--text)}
+  input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--panel);border:3px solid var(--text)}
+  select{background:var(--panel);color:var(--text);border:1px solid var(--line2);border-radius:5px;padding:5px 9px;cursor:pointer}
+  #sort{padding:2px 7px;font-size:14px}
+  .seg{display:inline-flex;border:1px solid var(--line2);border-radius:5px;overflow:hidden}
+  .seg button{background:transparent;color:var(--mute);border:0;padding:6px 12px;cursor:pointer;font-size:14.5px;transition:background .15s,color .15s}
+  .seg button:hover{color:var(--text)} .seg button.on{background:var(--text);color:var(--panel);font-weight:650}
   .seg button+button{border-left:1px solid var(--line2)}
-  .keys{color:var(--faint);font-size:12px;width:100%;margin-top:-2px}
-  kbd{font-family:var(--data);font-size:11.5px;border:1px solid var(--line2);border-radius:4px;padding:0 5px;color:var(--mute);background:var(--raise)}
+  #tfilt{display:flex;gap:12px;align-items:center;white-space:nowrap} #tfilt label{display:flex;align-items:center;gap:5px;cursor:pointer;font-family:var(--data);font-size:14.5px;font-weight:600} #tfilt input{accent-color:currentColor;cursor:pointer}
+  #tfilt .lbl2{color:var(--mute);font-size:14px;font-family:var(--ui);font-weight:500}
+  .seg-btn{background:transparent;color:var(--text);border:1px solid var(--line2);border-radius:5px;padding:5px 12px;cursor:pointer;font-size:14.5px} .seg-btn:hover{border-color:var(--text)}
+  .keys{color:var(--mute);font-size:13.5px;width:100%;margin-top:-2px}
+  kbd{font-family:var(--data);font-size:12.5px;border:1px solid var(--line2);border-bottom-width:2px;border-radius:3px;padding:0 5px;color:var(--text);background:var(--panel)}
 
   /* charts */
-  #charts{flex:1;display:flex;flex-direction:column;gap:2px;padding:10px 16px 12px}
-  .ch{flex:1;min-height:0;display:flex;flex-direction:column;border-top:1px solid var(--line);padding-top:6px}
+  #charts{flex:1;display:flex;flex-direction:column;gap:2px;padding:10px 16px 12px;overflow-y:auto}
+  .ch{flex:1 0 150px;min-height:150px;display:flex;flex-direction:column;border-top:1px solid var(--line);padding-top:7px}
   .ch:first-child{border-top:0;padding-top:0}
-  .ch-head{display:flex;align-items:baseline;gap:12px;font-size:13px;white-space:nowrap}
-  .ch-head h3{margin:0;font-size:13.5px;font-weight:600}
-  .ch-head .note{color:var(--mute);font-size:12px;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
-  .ch-head .vals{margin-left:auto;display:flex;gap:14px;font-family:var(--data);font-size:12.5px}
+  .ch-head{display:flex;align-items:baseline;gap:12px;font-size:14.5px;white-space:nowrap}
+  .ch-head h3{margin:0;font-size:15px;font-weight:700}
+  .ch-head .note{color:var(--mute);font-size:13.5px;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+  .ch-head .vals{margin-left:auto;display:flex;gap:14px;font-family:var(--data);font-size:13.5px;font-weight:500}
   .ch canvas{flex:1;min-height:0;cursor:ew-resize;touch-action:none}
 
-  @media (max-width:900px){
-    body{height:auto} header{flex-wrap:wrap} main{grid-template-columns:1fr} #fieldwrap,#card{flex:none} #fieldbody{flex-direction:column;height:auto} #field{height:300px;flex:none}
+  @media (max-width:1100px){
+    body{height:auto} header{flex-wrap:wrap} main{grid-template-columns:1fr} .side{max-height:340px}
+    #fieldwrap,#card{flex:none} #fieldbody{flex-direction:column;height:auto} #field{height:300px;flex:none}
     #tcol{flex:none} #tstat{flex-direction:row;flex-wrap:wrap} .tr{flex:1 1 170px} #charts .ch{min-height:170px;flex:none}
   }
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -134,14 +170,20 @@
 <body>
 <header>
   <div class="brand"><b>Straight Rows</b><span>detection replay</span></div>
-  <div class="tabs" id="tabs"></div>
+  <span class="grow"></span>
   <label class="file">Load bundle .json<input id="file" type="file" accept=".json" hidden></label>
 </header>
 <main>
+  <aside class="panel side" aria-label="Detections">
+    <div class="phead"><h2>Detections</h2>
+      <select id="sort" aria-label="Sort detections"><option value="time">By time</option><option value="class">By class</option><option value="conf">By confidence</option></select></div>
+    <div class="tabs" id="tabs"></div>
+    <div id="evlist"></div>
+  </aside>
   <div class="col">
     <div class="panel" id="fieldwrap">
       <div class="phead"><h2>Field, top-down <span class="sub">reported position</span></h2><span id="clock"><i class="live"></i><span id="clocktxt"></span></span></div>
-      <div id="fieldbody"><canvas id="field"></canvas><div id="tcol"><div id="tstat"></div><p class="foot">Marker ring grows with |XTE|; dashed red above 1 m.</p></div></div>
+      <div id="fieldbody"><canvas id="field"></canvas><div id="tcol"><div id="tstat"></div><p class="foot">Bar across each marker = smoothed |cross-track error| (10 px per m each way, east-west); red above 1 m.</p></div></div>
     </div>
     <div class="panel" id="card"></div>
   </div>
@@ -158,6 +200,8 @@
         <button data-m="own" title="Signal minus that tractor's own quiet median">vs own baseline</button>
         <button data-m="fleet" title="Signal minus the fleet median at the same second">vs fleet</button>
       </div>
+      <button id="allsig" class="seg-btn" title="Each class opens with the signals that prove it; show every signal instead"></button>
+      <div id="tfilt" role="group" aria-label="Show tractors" title="Show or hide each tractor in the field map, tractor cards and charts"><span class="lbl2">Show</span></div>
       <div class="keys"><kbd>Space</kbd> play · <kbd>←</kbd><kbd>→</kbd> ±30 s · <kbd>R</kbd> residual · <kbd>1</kbd>–<kbd>9</kbd> episode · drag a chart to scrub</div>
     </div>
     <div class="panel" id="charts"></div>
@@ -166,10 +210,10 @@
 
 <script>
 const BUNDLE = /*__BUNDLE__*/null;
-const TCOL = {T1:'#4cc2ff', T2:'#ffb454', T3:'#b4e06a'};
+const TCOL = {T1:'#1f66c1', T2:'#c24510', T3:'#0f7a53'};   // dark enough to read as text on paper (>=4.5:1)
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const FIX = ['NO FIX','AUTONOMOUS','DGPS','RTK FLOAT','RTK FIXED'];
-const FONT = '"IBM Plex Sans","Segoe UI",system-ui,sans-serif';
+const FONT = '"Hanken Grotesk","Segoe UI",system-ui,sans-serif';
 const ICON_PLAY = '<svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>Play';
 const ICON_PAUSE = '<svg viewBox="0 0 16 16"><path d="M3.5 2.5h3v11h-3zm6 0h3v11h-3z"/></svg>Pause';
 const ICON_AGAIN = '<svg viewBox="0 0 16 16"><path d="M8 2.5a5.5 5.5 0 1 0 5.5 5.5h-2A3.5 3.5 0 1 1 8 4.5V7l4-3.5L8 0z" transform="translate(0 1)"/></svg>Replay';
@@ -180,9 +224,31 @@ const CHARTS = [
   {title:'Cross-track error', note:'|XTE|, m', key:'xte', res:'r_xte', sig:'axte', abs:true, dp:2},
   {title:'Position offset vs XTE', note:'solid: lon offset · dashed: signed XTE', key:'londev', overlay:'xte', rawOnly:true, dp:2},
   {title:'Satellites tracked', note:'count', key:'sats', res:'r_sats', sig:'num_sats', dp:0},
+  {title:'Min C/N0', note:'dB-Hz, weakest satellite (multipath dips show here)', key:'mincn0', rawOnly:true, dp:1},
+  {title:'Speed', note:'m/s, about 4.5 working, 0 parked', key:'speed', rawOnly:true, dp:1},
+  {title:'Fix state', note:'one row per tractor', kind:'strip', key:'fix'},
+  {title:'Base link', note:'RTK correction link, one row per tractor', kind:'strip', key:'link'},
+  {title:'Dst', note:'nT, hourly; strongly negative = geomagnetic storm', kind:'dst'},
   {title:'S4 scintillation', note:'fleet-wide, space-side · ticks: advisories and RFI reports', key:null},
 ];
 
+// Which charts each class shows by default (indexes into CHARTS). The rest sit behind "All signals".
+// Picked from docs/FINDINGS.md: the signal that proves the class, plus the one that rules out its nearest alternative.
+const CLASS_CHARTS = {
+  JAMMING:         [0,3,4,6],   // C/N0, satellites, min C/N0, fix state
+  SPOOFING:        [2,1,0,6],   // offset vs XTE, XTE, C/N0, fix state
+  SPACE_WEATHER:   [9,8,0,3],   // S4, Dst, C/N0, satellites
+  EQUIPMENT_FAULT: [4,7,6,3],   // min C/N0, base link, fix state, satellites
+  MULTIPATH:       [4,0,1],     // min C/N0, C/N0, XTE
+};
+let showAll = false;
+const chartOn = ci => showAll || !clip || !CLASS_CHARTS[clip.cls] || CLASS_CHARTS[clip.cls].includes(ci);
+function applyCharts(){
+  chartEls.forEach((c,ci)=>{ c.wrap.style.display = chartOn(ci) ? '' : 'none'; });
+  const n = clip && CLASS_CHARTS[clip.cls] ? CLASS_CHARTS[clip.cls].length : CHARTS.length;
+  const b = $('allsig'); if(b) b.textContent = showAll ? `Show key signals (${n})` : `All signals (${CHARTS.length})`;
+}
+let tractorsOn = {T1:true,T2:true,T3:true}, cur = 0, filterCls = 'ALL', sortBy = 'time', mpOpen = false, visible = [];
 let B = BUNDLE, clip = null, t = 0, playing = true, mode = 'raw', last = 0;
 const $ = id => document.getElementById(id);
 const fieldC = $('field');
@@ -191,12 +257,7 @@ let chartEls = [];
 function init(){
   if(!B){ document.body.innerHTML = '<p style="padding:20px">No data. Run scripts/make_viz.py or load a bundle .json.</p>' +
     '<label class="file" style="margin:20px">Load bundle<input id="file" type="file" accept=".json" hidden></label>'; wireFile(); return; }
-  $('tabs').innerHTML = '';
-  B.clips.forEach((c,i)=>{
-    const b = document.createElement('button'); b.className='tab';
-    b.innerHTML = `<span class="dot" style="background:${css('--'+c.cls)}"></span><span class="nm">${c.id}</span><span class="cl">${c.cls.replace('_',' ')}</span>`;
-    b.onclick = ()=>select(i); $('tabs').appendChild(b);
-  });
+  renderChips();
   $('charts').innerHTML = '';
   chartEls = CHARTS.map(def=>{
     const d = document.createElement('div'); d.className='ch';
@@ -207,7 +268,7 @@ function init(){
     cv.onpointerdown = e => { cv.setPointerCapture(e.pointerId); playing=false; $('play').innerHTML = ICON_PLAY; at(e); cv._drag = true; };
     cv.onpointermove = e => { if(cv._drag) at(e); };
     cv.onpointerup = () => { cv._drag = false; };
-    return {def, cv, note:d.querySelector('.note'), vals:d.querySelector('.vals')};
+    return {def, cv, wrap:d, note:d.querySelector('.note'), vals:d.querySelector('.vals')};
   });
   // deep link: #c=<clip index>&t=<seconds>&play=0 (handy for screenshots and rehearsal)
   const h = Object.fromEntries(location.hash.slice(1).split('&').filter(Boolean).map(p=>p.split('=')));
@@ -216,9 +277,60 @@ function init(){
   if(h.play==='0'){ playing = false; $('play').innerHTML = ICON_PLAY; }
 }
 
+// ---------- event list: filter chips, sorting, grouped multipath ----------
+const CLASSES = ['SPACE_WEATHER','JAMMING','SPOOFING','EQUIPMENT_FAULT','MULTIPATH'];
+const clsName = c => c.replace('_',' ');
+const clipStart = c => new Date(c.t0).getTime() + c.ev_start*1000;
+function totalFor(cls){ return (B.totals && B.totals[cls]!=null) ? B.totals[cls] : B.clips.filter(c=>c.cls===cls).length; }
+function renderChips(){
+  const all = B.totals ? Object.values(B.totals).reduce((a,b)=>a+b,0) : B.clips.length;
+  const opts = [['ALL','All',all,null], ...CLASSES.filter(c=>totalFor(c)>0).map(c=>[c,clsName(c),totalFor(c),c])];
+  $('tabs').innerHTML = '';
+  opts.forEach(([k,label,n,cls])=>{
+    const b = document.createElement('button'); b.className = 'tab' + (filterCls===k?' on':'');
+    b.innerHTML = (cls?`<span class="dot" style="background:${css('--'+cls)}"></span>`:'') + `<span class="cl">${label}</span><span class="n">${n}</span>`;
+    b.onclick = ()=>{ filterCls = k; if(k==='MULTIPATH') mpOpen = true; renderChips(); renderList(); };
+    $('tabs').appendChild(b);
+  });
+}
+function renderList(){
+  const el = $('evlist'); if(!el) return;
+  const cmp = {time:(a,b)=>clipStart(a.c)-clipStart(b.c),
+    class:(a,b)=>CLASSES.indexOf(a.c.cls)-CLASSES.indexOf(b.c.cls) || clipStart(a.c)-clipStart(b.c),
+    conf:(a,b)=>(b.c.confidence ?? -1)-(a.c.confidence ?? -1) || clipStart(a.c)-clipStart(b.c)}[sortBy];
+  const items = B.clips.map((c,i)=>({c,i})).filter(x=>(filterCls==='ALL' || x.c.cls===filterCls));
+  const main = items.filter(x=>x.c.cls!=='MULTIPATH').sort(cmp), mp = items.filter(x=>x.c.cls==='MULTIPATH').sort(cmp);
+  visible = [];
+  const row = (x, cls) => {
+    const c = x.c; visible.push(x.i);
+    const when = new Date(clipStart(c)).toISOString().slice(11,16)+'Z', secs = Math.round(c.ev_end-c.ev_start);
+    const dur = secs < 120 ? secs+' s' : Math.round(secs/60)+' min';
+    return `<button class="ev ${cls||''} ${x.i===cur?'on':''}" style="--c:var(--${c.cls})" data-i="${x.i}">`
+      + `<span class="mk"></span><span class="cl">${clsName(c.cls)}</span><span class="id">${esc(c.id)}</span>`
+      + `<span class="tch">${c.tractors.map(t=>`<span style="color:${TCOL[t]}">${t}</span>`).join('')}</span>`
+      + `<span class="tm">${when} · ${dur}${c.confidence==null?'':` · <span class="cf">${Math.round(c.confidence*100)}%</span>`}</span></button>`;
+  };
+  let h = main.map(x=>row(x)).join('');
+  if(mp.length){
+    const tot = totalFor('MULTIPATH');
+    const chev = `<svg class="chev" viewBox="0 0 10 10" aria-hidden="true"><path d="${mpOpen?'M1.5 3.5 5 7l3.5-3.5':'M3.5 1.5 7 5 3.5 8.5'}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    h += `<button class="ev grp" style="--c:var(--MULTIPATH)" data-grp="1"><span class="mk"></span><span class="cl">${chev}Multipath</span><span class="id">${mp.length} shown</span>`
+       + `<span class="note">${tot} detections: ${Math.round(tot/3)} headland passes × 3 tractors, one per tractor per pass. ${mpOpen?'Collapse':'Expand'} to see the ${mp.length} sampled in this file.</span></button>`;
+    if(mpOpen) h += mp.map(x=>row(x,'sub')).join('');
+  }
+  el.innerHTML = h || '<span class="dim" style="padding:6px">No detections match.</span>';
+  el.querySelectorAll('.ev[data-i]').forEach(b=>b.onclick = ()=>select(+b.dataset.i));
+  const g = el.querySelector('[data-grp]'); if(g) g.onclick = ()=>{ mpOpen = !mpOpen; renderList(); };
+}
+$('tfilt').insertAdjacentHTML('beforeend', ['T1','T2','T3'].map(t=>`<label style="color:${TCOL[t]}"><input type="checkbox" data-t="${t}" checked>${t}</label>`).join(''));
+$('tfilt').onchange = e => { tractorsOn[e.target.dataset.t] = e.target.checked; };
+$('allsig').onclick = () => { showAll = !showAll; applyCharts(); };
+$('sort').onchange = e => { sortBy = e.target.value; renderList(); };
+
+const vis = () => Object.keys(clip.trk).filter(id=>tractorsOn[id]);
 function select(i){
   clip = B.clips[i]; t = 0; playing = true; $('play').innerHTML = ICON_PAUSE;
-  [...$('tabs').children].forEach((b,j)=>b.classList.toggle('on', i===j));
+  cur = i; renderList(); applyCharts();
   document.documentElement.style.setProperty('--accent', css('--'+clip.cls));
   clip.len = (clip.n - 1) * clip.step;
   computeBounds(); computeTicks(); renderCard(); renderTractorRows();
@@ -230,6 +342,12 @@ function computeBounds(){
   let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
   for(const id in clip.trk){ const k=clip.trk[id]; for(let i=0;i<k.x.length;i++){ x0=Math.min(x0,k.x[i]); x1=Math.max(x1,k.x[i]); y0=Math.min(y0,k.y[i]); y1=Math.max(y1,k.y[i]); } }
   const m = 20; clip.bounds = {x0:x0-m,x1:x1+m,y0:y0-m,y1:y1+m};
+  // fitted jammer: widen the map to include it when it is within 600 m of the tractors, else it is shown as an edge arrow
+  const j = clip.jam;
+  if(j && j.reliable && Math.hypot(Math.max(x0-j.x, 0, j.x-x1), Math.max(y0-j.y, 0, j.y-y1)) <= 600){
+    const r = Math.max(j.a_m, 15); const b = clip.bounds;
+    b.x0=Math.min(b.x0,j.x-r-m); b.x1=Math.max(b.x1,j.x+r+m); b.y0=Math.min(b.y0,j.y-r-m); b.y1=Math.max(b.y1,j.y+r+m);
+  }
 }
 // time-axis ticks at round wall-clock minutes, about 6-8 across the clip
 function computeTicks(){
@@ -250,6 +368,12 @@ const idxNow = () => Math.min(clip.n-1, Math.floor(t / clip.step));
 const inEvent = () => t >= clip.ev_start && t <= clip.ev_end;
 
 // ---------- field ----------
+// signed XTE averaged over about 15 s so per-sample noise does not make the marker jitter
+function smoothXte(k,i){
+  const h = Math.max(1,Math.ceil(7/clip.step)); let sum=0,n=0;
+  for(let j=Math.max(0,i-h); j<=Math.min(clip.n-1,i+h); j++){ if(k.xte[j]!=null){ sum+=k.xte[j]; n++; } }
+  return n ? sum/n : 0;
+}
 function drawField(){
   const {ctx,w,h} = fit(fieldC); ctx.clearRect(0,0,w,h);
   const b = clip.bounds, bw = b.x1-b.x0, bh = b.y1-b.y0;
@@ -261,7 +385,7 @@ function drawField(){
   for(let gx=Math.ceil(b.x0/50)*50; gx<=b.x1; gx+=50){ ctx.moveTo(X(gx),Y(b.y0)); ctx.lineTo(X(gx),Y(b.y1)); }
   for(let gy=Math.ceil(b.y0/50)*50; gy<=b.y1; gy+=50){ ctx.moveTo(X(b.x0),Y(gy)); ctx.lineTo(X(b.x1),Y(gy)); }
   ctx.globalAlpha = .55; ctx.stroke(); ctx.globalAlpha = 1;
-  for(const id in clip.trk){
+  for(const id of vis()){
     const k = clip.trk[id], col = TCOL[id];
     ctx.strokeStyle = col+'26'; ctx.beginPath();
     for(let j=0;j<k.x.length;j+=Math.max(1,Math.floor(30/clip.step))) j?ctx.lineTo(X(k.x[j]),Y(k.y[j])):ctx.moveTo(X(k.x[j]),Y(k.y[j]));
@@ -270,62 +394,166 @@ function drawField(){
     ctx.strokeStyle = col; ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.beginPath();
     for(let j=from;j<=i;j++) j===from?ctx.moveTo(X(k.x[j]),Y(k.y[j])):ctx.lineTo(X(k.x[j]),Y(k.y[j]));
     ctx.stroke(); ctx.lineWidth = 1;
-    // marker: ring radius grows with |xte| (1 m = +10 px); flagged tractors get a class-colored halo
-    const px = X(k.x[i]), py = Y(k.y[i]), xte = Math.abs(k.xte[i] ?? 0), flagged = live && clip.tractors.includes(id);
-    if(flagged){ ctx.fillStyle = cls+'30'; ctx.beginPath(); ctx.arc(px,py,16+xte*10,0,7); ctx.fill(); }
-    ctx.strokeStyle = xte>1 ? '#ff6b6b' : col; ctx.lineWidth = 1.5; ctx.setLineDash(xte>1?[4,3]:[]);
-    ctx.beginPath(); ctx.arc(px,py,8+xte*10,0,7); ctx.stroke(); ctx.setLineDash([]);
+    // marker: fixed size so it does not jump. XTE (unsigned) is drawn as a smoothed symmetric east-west bar
+    const px = X(k.x[i]), py = Y(k.y[i]), flagged = live && clip.tractors.includes(id);
+    const sx = smoothXte(k,i), bad = Math.abs(sx)>1;
+    if(flagged){ ctx.fillStyle = cls+'30'; ctx.beginPath(); ctx.arc(px,py,16,0,7); ctx.fill(); }
+    ctx.strokeStyle = bad ? '#b3261e' : col; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(px,py,8,0,7); ctx.stroke();
+    if(Math.abs(sx)>0.05){
+      // rows run north-south (lat sweeps, lon steps), so cross-track is the east-west direction: draw the bar horizontally
+      const L = Math.min(Math.abs(sx),3)*10;   // 10 px per metre, capped at 3 m; both ways because XTE has no sign
+      ctx.strokeStyle = bad ? '#b3261e' : col; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(px-L,py); ctx.lineTo(px+L,py); ctx.stroke(); ctx.lineWidth = 1;
+    }
     ctx.fillStyle = flagged ? cls : col; ctx.beginPath(); ctx.arc(px,py,5.5,0,7); ctx.fill();
-    ctx.font = `600 12px ${FONT}`; ctx.lineWidth = 3; ctx.strokeStyle = css('--panel'); ctx.strokeText(id, px+12, py-9);
+    ctx.font = `600 14px ${FONT}`; ctx.lineWidth = 3; ctx.strokeStyle = css('--panel'); ctx.strokeText(id, px+12, py-9);
     ctx.fillStyle = col; ctx.fillText(id, px+12, py-9); ctx.lineWidth = 1;
   }
-  ctx.font = `12px ${FONT}`; ctx.fillStyle = css('--mute'); ctx.fillText('N ↑', 6, 14);
+  drawJammer(ctx, w, h, X, Y, s, b);
+  ctx.font = `14px ${FONT}`; ctx.fillStyle = css('--mute'); ctx.fillText('N ↑', 6, 16);
   const L = 100; ctx.fillStyle = css('--mute'); ctx.fillRect(8, h-14, L*s, 2); ctx.fillText('100 m', 8, h-20);
   
+}
+
+// RFI report ellipses (centre + semi-axes; orientation is not given, so axes are drawn east-west / north-south, dashed)
+// and the jammer position fitted from the tractors' own C/N0 (straightrows/locate.py) with its 95% error ellipse.
+function drawJammer(ctx, w, h, X, Y, s, b){
+  const o = clip.origin, k0 = 111320*Math.cos(o[0]*Math.PI/180), k1 = 110574;
+  const col = css('--JAMMING'), mute = css('--mute');
+  for(const r of clip.rfi){
+    const px = X((r.lon-o[1])*k0), py = Y((r.lat-o[0])*k1);
+    ctx.save(); ctx.setLineDash([3,4]); ctx.strokeStyle = mute; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(px, py, r.a_km*1000*s, r.b_km*1000*s, 0, 0, 7); ctx.stroke(); ctx.restore();
+    ctx.font = `12px ${FONT}`; ctx.fillStyle = mute; ctx.fillText(r.id+' centre', px+4, py-4);
+    ctx.beginPath(); ctx.moveTo(px-4,py); ctx.lineTo(px+4,py); ctx.moveTo(px,py-4); ctx.lineTo(px,py+4); ctx.strokeStyle = mute; ctx.stroke();
+  }
+  const j = clip.jam; if(!j) return;
+  if(!j.reliable){ ctx.font = `13px ${FONT}`; ctx.fillStyle = mute; ctx.fillText('Jammer fit not reliable: '+j.notes.join('; '), 6, h-34); return; }
+  let px = X(j.x), py = Y(j.y);
+  const out = px < 14 || px > w-14 || py < 30 || py > h-30;
+  if(out){  // fit lies off the map: arrow on the border towards it
+    px = Math.max(16, Math.min(w-16, px)); py = Math.max(34, Math.min(h-34, py));
+  } else {
+    // 95% error ellipse (long axis bearing is clockwise from north; canvas y points down)
+    const rot = Math.atan2(-Math.cos(j.bearing*Math.PI/180), Math.sin(j.bearing*Math.PI/180));
+    ctx.save(); ctx.translate(px,py); ctx.rotate(rot);
+    ctx.fillStyle = col+'33'; ctx.strokeStyle = col; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.ellipse(0,0, Math.max(j.a_m*s,4), Math.max(j.b_m*s,4), 0, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore();
+    // distance to each tractor right now (C/N0 falls with distance to the source, this is the model the fit rests on)
+    const i = idxNow(); ctx.setLineDash([2,4]); ctx.lineWidth = 1;
+    for(const id of vis()){
+      const k = clip.trk[id], tx = X(k.x[i]), ty = Y(k.y[i]);
+      ctx.strokeStyle = TCOL[id]+'88'; ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(tx,ty); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+  // marker: crosshair in a ring, so it reads as "transmitter", distinct from the tractor dots
+  ctx.strokeStyle = col; ctx.fillStyle = css('--panel'); ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(px,py,7,0,7); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(px-11,py); ctx.lineTo(px+11,py); ctx.moveTo(px,py-11); ctx.lineTo(px,py+11); ctx.stroke();
+  const err = j.a_m >= 1000 ? (j.a_m/1000).toFixed(1)+' km' : j.a_m+' m';
+  const dirTxt = out ? ` (off map, ${Math.round(Math.hypot(j.x-(clip.bounds.x0+clip.bounds.x1)/2, j.y-(clip.bounds.y0+clip.bounds.y1)/2))} m from centre)` : '';
+  ctx.font = `600 14px ${FONT}`; ctx.lineWidth = 3; ctx.strokeStyle = css('--panel');
+  const label = `Jammer fit ±${err}${dirTxt}`, lx = Math.min(px+14, w - ctx.measureText(label).width - 6);
+  ctx.strokeText(label, lx, py+18); ctx.fillStyle = col; ctx.fillText(label, lx, py+18); ctx.lineWidth = 1;
 }
 
 function renderTractorRows(){
   $('tstat').innerHTML = Object.keys(clip.trk).map(id =>
     `<div class="tr" id="tr-${id}"><b style="color:${TCOL[id]}">${id}</b><span></span><span></span><span></span><span></span></div>`).join('');
+  const j = clip.jam;
+  // details on hover: the field panel is too small for a paragraph; the on-map label carries the headline number
+  fieldC.title = !j ? '' : j.reliable
+    ? `Jammer fit ${j.lat.toFixed(4)}N ${Math.abs(j.lon).toFixed(4)}W, 95% ellipse ${j.a_m} x ${j.b_m} m (long axis bearing ${j.bearing} deg). C/N0 = a + b*log10(distance): b ${j.slope} dB/decade, RMSE ${j.rmse} dB. Dashed grey ellipses are RFI reports (orientation not given).`
+    : `Jammer fit not reported: ${j.notes.join('; ')}.`;
 }
 function updateTractorRows(){
   const i = idxNow(), live = inEvent();
   for(const id in clip.trk){
     const k = clip.trk[id], row = $('tr-'+id); if(!row) continue;
-    const sp = row.children;
+    const sp = row.children; row.style.display = tractorsOn[id] ? '' : 'none';
     row.classList.toggle('hit', live && clip.tractors.includes(id));
     sp[1].textContent = `${k.cn0[i]==null?'–':k.cn0[i].toFixed(1)} dB-Hz`;
     sp[2].textContent = `${k.sats[i]} sv`;
-    sp[3].textContent = `XTE ${(k.xte[i] ?? 0).toFixed(2)} m`;
+    sp[3].textContent = `XTE ${smoothXte(k,i).toFixed(2)} m`;
     sp[4].innerHTML = FIX[k.fix[i]] + (k.link[i] ? '' : '<span class="chip">BASE LINK LOST</span>');
     sp[4].className = k.fix[i] < 4 ? 'warn' : '';
   }
 }
 
 // ---------- charts ----------
-const PADL = 42, PADR = 8;
+const PADL = 48, PADR = 8;
 function series(def, id){
   const k = clip.trk[id];
   if(mode==='raw' || def.rawOnly) return def.abs ? k[def.key].map(v=>v==null?null:Math.abs(v)) : k[def.key];
   return k[`${def.res}_${mode}`];
 }
 const hm = sec => fmt(sec).slice(0,5);
+const FIXCOL = ['#8b1e2d','#e5484d','#ff9f43','#f7d154','#4ade80'];   // NO FIX .. RTK FIXED
+const LINKCOL = ['#e5484d','#4ade80'];                                 // lost, ok
+// shared frame for the non-line charts: event band, time grid, axis labels, playhead
+function frameBase(ctx, w, h, ph, axisH, X, left){
+  const col = css('--'+clip.cls);
+  ctx.fillStyle = col+'1f'; ctx.fillRect(X(clip.ev_start), 0, X(clip.ev_end)-X(clip.ev_start), ph+4);
+  ctx.fillStyle = col+'99'; ctx.fillRect(X(clip.ev_start), 0, 1.5, ph+4); ctx.fillRect(X(clip.ev_end)-1, 0, 1.5, ph+4);
+  ctx.font=`13px ${FONT}`; ctx.textAlign='center'; ctx.fillStyle = css('--mute');
+  for(const tk of clip.ticks){ ctx.strokeStyle = css('--line'); ctx.globalAlpha=.5; ctx.beginPath(); ctx.moveTo(X(tk),4); ctx.lineTo(X(tk),ph+4); ctx.stroke(); ctx.globalAlpha=1;
+    if(axisH) ctx.fillText(hm(tk), X(tk), h-4); }
+  ctx.textAlign='left';
+}
+function playhead(ctx, X, ph){ ctx.strokeStyle = css('--text'); ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(X(t),0); ctx.lineTo(X(t),ph+4); ctx.stroke(); }
+function drawSpecial(def, ctx, w, h, ph, axisH, X, vals){
+  const i = idxNow(), ids = vis();
+  if(def.kind==='strip'){
+    const pal = def.key==='fix' ? FIXCOL : LINKCOL, rowH = (ph-2)/ids.length;
+    ids.forEach((id,r)=>{
+      const arr = clip.trk[id][def.key], y0 = 4 + r*rowH, stride = Math.max(1, Math.floor(arr.length/((w-PADL-PADR)*1.5)));
+      for(let j=0;j<arr.length;j+=stride){ const x0 = X(j*clip.step), x1 = X(Math.min(arr.length-1, j+stride)*clip.step);
+        ctx.fillStyle = pal[arr[j]]; ctx.fillRect(x0, y0+1, Math.max(1,x1-x0+0.5), rowH-3); }
+      ctx.fillStyle = TCOL[id]; ctx.font=`600 13px ${FONT}`; ctx.textAlign='right'; ctx.fillText(id, PADL-6, y0+rowH/2+3); ctx.textAlign='left';
+    });
+    frameBase(ctx, w, h, ph, axisH, X);
+    playhead(ctx, X, ph);
+    if(vals.children.length !== ids.length) vals.innerHTML = ids.map(id=>`<span style="color:${TCOL[id]}"></span>`).join('');
+    ids.forEach((id,n)=>{ const v = clip.trk[id][def.key][i];
+      vals.children[n].textContent = `${id} ` + (def.key==='fix' ? FIX[v] : (v ? 'OK' : 'LOST')); });
+    return;
+  }
+  // Dst: hourly step line in nT
+  const pw = w-PADL-PADR; let lo=1e9, hi=-1e9;
+  for(const [,v] of clip.dst){ lo=Math.min(lo,v); hi=Math.max(hi,v); }
+  lo=Math.min(lo,0); hi=Math.max(hi,0); const pad=(hi-lo)*0.1||1; lo-=pad; hi+=pad;
+  const Y = v => 4 + (1-(v-lo)/(hi-lo))*ph;
+  frameBase(ctx, w, h, ph, axisH, X);
+  ctx.strokeStyle = css('--line'); ctx.fillStyle = css('--mute'); ctx.font=`13px ${FONT}`; ctx.lineWidth=1; ctx.textAlign='right';
+  for(let g=0; g<=3; g++){ const v = lo+(hi-lo)*g/3, y=Y(v); ctx.beginPath(); ctx.moveTo(PADL,y); ctx.lineTo(w-PADR,y); ctx.stroke(); ctx.fillText(v.toFixed(0), PADL-6, y+4); }
+  ctx.textAlign='left';
+  ctx.strokeStyle = css('--sw-ink'); ctx.lineWidth=2; ctx.beginPath();
+  clip.dst.forEach(([tt,v],j)=>{ const x=X(Math.max(0,tt)), y=Y(v); if(j===0) ctx.moveTo(x,y); else { ctx.lineTo(x, Y(clip.dst[j-1][1])); ctx.lineTo(x,y); } });
+  if(clip.dst.length) ctx.lineTo(X(clip.len), Y(clip.dst[clip.dst.length-1][1]));
+  ctx.stroke();
+  playhead(ctx, X, ph);
+  const d = step_at(clip.dst, t); vals.textContent = d==null ? '' : `Dst ${d.toFixed(0)} nT`; vals.style.color = css('--sw-ink');
+}
 function drawCharts(){
-  const i = idxNow(), last = chartEls.length-1;
+  const i = idxNow();
   chartEls.forEach(({def, cv, note, vals}, ci)=>{
+    if(!chartOn(ci)) return;
     const {ctx,w,h} = fit(cv); ctx.clearRect(0,0,w,h);
-    const axisH = ci===last ? 16 : 0, pw = w-PADL-PADR, ph = h-8-axisH, X = tt => PADL + tt/clip.len*pw;
+    const axisH = 18, pw = w-PADL-PADR, ph = h-8-axisH, X = tt => PADL + tt/clip.len*pw;
     let lines = [], band = null, sub = def.note;
     if(def.key){
-      for(const id in clip.trk) lines.push({id, v: series(def,id), col:TCOL[id]});
+      for(const id of vis()) lines.push({id, v: series(def,id), col:TCOL[id]});
       if(mode!=='raw' && !def.rawOnly){ const sg = B.sigma; const s = Math.max(...Object.keys(sg).map(t=>sg[t][def.sig])); band = 3*s;
         sub = `residual ${mode==='own'?'vs own baseline':'vs fleet median'} · shaded ±3σ`; }
     }
     if(note.textContent !== sub) note.textContent = sub;
+    if(def.kind){ drawSpecial(def, ctx, w, h, ph, axisH, X, vals); return; }
     // y range
     let lo=1e9, hi=-1e9;
     if(def.key){ for(const l of lines) for(const v of l.v) if(v!=null){lo=Math.min(lo,v);hi=Math.max(hi,v);}
-      if(def.overlay) for(const id in clip.trk) for(const v of clip.trk[id][def.overlay]) if(v!=null){lo=Math.min(lo,v);hi=Math.max(hi,v);}
+      if(def.overlay) for(const id of vis()) for(const v of clip.trk[id][def.overlay]) if(v!=null){lo=Math.min(lo,v);hi=Math.max(hi,v);}
       if(band){lo=Math.min(lo,-band);hi=Math.max(hi,band);} }
     else { for(const [,v] of clip.s4){lo=Math.min(lo,v);hi=Math.max(hi,v);} lo=0; hi=Math.max(hi,0.5); }
     const pad = (hi-lo)*0.08||1; hi+=pad; lo = (def.key && mode==='raw' && !def.rawOnly && lo>=0) ? Math.max(0, lo-pad) : lo-pad;
@@ -335,39 +563,39 @@ function drawCharts(){
     ctx.fillStyle = col+'1f'; ctx.fillRect(X(clip.ev_start), 0, X(clip.ev_end)-X(clip.ev_start), ph+4);
     ctx.fillStyle = col+'99'; ctx.fillRect(X(clip.ev_start), 0, 1.5, ph+4); ctx.fillRect(X(clip.ev_end)-1, 0, 1.5, ph+4);
     // grid + axes
-    ctx.strokeStyle = css('--line'); ctx.fillStyle = css('--mute'); ctx.font=`11px ${FONT}`; ctx.lineWidth=1;
+    ctx.strokeStyle = css('--line'); ctx.fillStyle = css('--mute'); ctx.font=`13px ${FONT}`; ctx.lineWidth=1;
     for(let g=0; g<=3; g++){ const v = lo+(hi-lo)*g/3, y=Y(v); ctx.beginPath(); ctx.moveTo(PADL,y); ctx.lineTo(w-PADR,y); ctx.stroke(); ctx.textAlign='right'; ctx.fillText(v.toFixed(def.dp===0 ? 0 : (Math.abs(hi-lo)<5?2:0)), PADL-6, y+4); }
     ctx.textAlign='center';
     for(const tk of clip.ticks){ ctx.strokeStyle = css('--line'); ctx.globalAlpha=.5; ctx.beginPath(); ctx.moveTo(X(tk),4); ctx.lineTo(X(tk),ph+4); ctx.stroke(); ctx.globalAlpha=1;
-      if(axisH) ctx.fillText(hm(tk), X(tk), h-3); }
+      if(axisH) ctx.fillText(hm(tk), X(tk), h-4); }
     ctx.textAlign='left';
-    if(ci===0){ ctx.fillStyle = col; ctx.font=`600 11px ${FONT}`; ctx.fillText('DETECTED', X(clip.ev_start)+6, 14); }
-    if(band){ ctx.fillStyle='#ffffff12'; ctx.fillRect(PADL, Y(band), pw, Y(-band)-Y(band)); }
+    if(ci===chartEls.findIndex((_,k)=>chartOn(k))){ ctx.fillStyle = col; ctx.font=`600 13px ${FONT}`; ctx.fillText('DETECTED', X(clip.ev_start)+6, 14); }
+    if(band){ ctx.fillStyle='#17181b0d'; ctx.fillRect(PADL, Y(band), pw, Y(-band)-Y(band)); }
     const stroke = (arr, c, dash, lw) => {
       ctx.strokeStyle = c; ctx.lineWidth = lw; ctx.setLineDash(dash); ctx.beginPath(); let pen=false;
       const stride = Math.max(1, Math.floor(arr.length/(pw*1.5)));
       for(let j=0;j<arr.length;j+=stride){ const v=arr[j]; if(v==null){pen=false;continue;} const x=X(j*clip.step),y=Y(v); pen?ctx.lineTo(x,y):ctx.moveTo(x,y); pen=true; }
       ctx.stroke(); ctx.setLineDash([]); };
     if(def.key){
-      if(def.overlay) for(const id in clip.trk) stroke(clip.trk[id][def.overlay], TCOL[id], [3,3], 1.4);
+      if(def.overlay) for(const id of vis()) stroke(clip.trk[id][def.overlay], TCOL[id], [3,3], 1.4);
       for(const l of lines){
         stroke(l.v, l.col, [], 1.6);
         const v = l.v[i]; if(v!=null){ ctx.fillStyle=l.col; ctx.beginPath(); ctx.arc(X(t),Y(v),4,0,7); ctx.fill(); }
       }
     } else {
-      ctx.strokeStyle = css('--SPACE_WEATHER'); ctx.lineWidth=2; ctx.beginPath();
+      ctx.strokeStyle = css('--sw-ink'); ctx.lineWidth=2; ctx.beginPath();
       clip.s4.forEach(([tt,v],j)=>{ j?ctx.lineTo(X(Math.max(0,tt)),Y(v)):ctx.moveTo(X(Math.max(0,tt)),Y(v)); }); ctx.stroke();
-      ctx.fillStyle = css('--mute'); ctx.font=`10.5px ${FONT}`;
+      ctx.fillStyle = css('--mute'); ctx.font=`12.5px ${FONT}`;
       clip.adv.concat(clip.rfi.map(r=>({t:r.t,type:'RFI'}))).forEach(a=>{ if(a.t>=0&&a.t<=clip.len){ctx.fillRect(X(a.t)-1,ph-8,2,12); ctx.fillText(a.type==='RFI'?'RFI':'ADV',X(a.t)+4,ph+1);} });
     }
     // playhead
     ctx.strokeStyle = css('--text'); ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(X(t),0); ctx.lineTo(X(t),ph+4); ctx.stroke();
     // live values in the header, one per tractor, in tractor colors
     if(def.key){
-      if(!vals.children.length) vals.innerHTML = lines.map(l=>`<span style="color:${l.col}"></span>`).join('');
+      if(vals.children.length !== lines.length) vals.innerHTML = lines.map(l=>`<span style="color:${l.col}"></span>`).join('');
       lines.forEach((l,n)=>{ const v = l.v[i], o = def.overlay ? clip.trk[l.id][def.overlay][i] : null;
         vals.children[n].textContent = `${l.id} ${v==null?'–':v.toFixed(def.dp)}` + (def.overlay ? ` / ${o==null?'–':o.toFixed(def.dp)}` : ''); });
-    } else { const s4 = step_at(clip.s4, t); vals.textContent = s4==null ? '' : `S4 ${s4.toFixed(2)}`; vals.style.color = css('--SPACE_WEATHER'); }
+    } else { const s4 = step_at(clip.s4, t); vals.textContent = s4==null ? '' : `S4 ${s4.toFixed(2)}`; vals.style.color = css('--sw-ink'); }
   });
 }
 
@@ -375,19 +603,42 @@ function drawCharts(){
 function fmt(sec){ const d = new Date(new Date(clip.t0).getTime() + sec*1000); return d.toISOString().slice(11,19)+'Z'; }
 function step_at(arr, tt){ let v=null; for(const [a,b] of arr){ if(a<=tt) v=b; else break; } return v; }
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+// full text of the advisories / RFI reports near this clip (what the evidence strings cite)
+function sdaDetail(c){
+  const items = [
+    ...c.adv.map(a=>({t:a.t, h:`<b>${esc(a.id)}</b> ${esc(a.type)}${a.svn?' · '+esc(a.svn):''} <span class="dim">${fmt(a.t)}</span><br>${esc(a.text)}`})),
+    ...c.rfi.map(r=>({t:r.t, h:`<b>${esc(r.id)}</b> RFI · ${esc(r.band)} · conf ${r.conf.toFixed(2)} <span class="dim">${fmt(r.t)}</span><br>centre ${r.lat.toFixed(3)}, ${r.lon.toFixed(3)} · ellipse ${r.a_km} × ${r.b_km} km (orientation not given)<br>${esc(r.text)}`}))
+  ].sort((a,b)=>a.t-b.t);
+  if(!items.length) return '<div class="sdad"><span class="lbl">Advisories and RFI</span><p class="dim" style="margin:6px 0 0">None near this clip.</p></div>';
+  return `<div class="sdad"><span class="lbl">Advisories and RFI</span>${items.map(x=>`<p>${x.h}</p>`).join('')}</div>`;
+}
+// One evidence line: "->" becomes an arrow, UTC times inside the clip become buttons that scrub to them,
+// and a conclusion that rules something out ("-> not space weather") gets a small tag so it can be found fast.
+function evLine(text){
+  const day = clip.t0.slice(0,10), t0 = new Date(clip.t0).getTime();
+  const [claim, ...rest] = String(text).split(' -> ');
+  const link = txt => esc(txt).replace(/(?:(\d{4}-\d{2}-\d{2})[ T])?(\d{2}):(\d{2})(?::(\d{2}))?Z/g, (m,d,hh,mm,ss)=>{
+    const sec = (Date.parse(`${d||day}T${hh}:${mm}:${ss||'00'}Z`) - t0)/1000;
+    return sec>=0 && sec<=clip.len ? `<button class="ts" data-s="${sec}">${m}</button>` : m; });
+  const concl = rest.join(' → ');
+  const rules = /\bnot\b/i.test(concl);
+  return `<li>${rules?'<span class="ruled">Rules out</span>':''}${link(claim)}${concl?` <span class="arrow">→</span> <span class="concl">${link(concl)}</span>`:''}</li>`;
+}
 function renderCard(){
   const c = clip, col = css('--'+c.cls), secs = Math.round(c.ev_end-c.ev_start), dur = secs < 120 ? secs+' s' : Math.round(secs/60)+' min';
   const conf = c.confidence==null ? '<span class="dim">dev label, no confidence</span>'
      : `<span class="bar"><i style="width:${c.confidence*100}%"></i></span><span class="pct">${(c.confidence*100).toFixed(0)}%</span>`;
-  const ev = c.evidence.length ? `<ul>${c.evidence.map(e=>`<li>${esc(e)}</li>`).join('')}</ul>` : '<p class="dim" style="margin:6px 0 0">None in this source (dev labels carry no evidence text).</p>';
+  const ev = c.evidence.length ? `<ul>${c.evidence.map(e=>evLine(e)).join('')}</ul>` : '<p class="dim" style="margin:6px 0 0">None in this source (dev labels carry no evidence text).</p>';
   const el = $('card');
   el.innerHTML = `
     <div class="ctop"><span class="cls"><i></i>${c.cls.replace('_',' ')}</span><span class="cid">${c.id}</span></div>
     <div class="meta">${c.tractors.map(t=>`<span class="tch" style="color:${TCOL[t]}">${t}</span>`).join('')}<span class="when">${fmt(c.ev_start)} – ${fmt(c.ev_end)}</span><span>${dur}</span></div>
-    <div class="action"><span class="lbl">Recommended action</span><b>${c.action.replace(/_/g,' ')}</b></div>
-    <div class="conf"><span class="lbl">Confidence</span>${conf}</div>
-    <div class="evid"><span class="lbl">Evidence</span>${ev}</div>
-    <div class="space"><span>Space-side now</span><span class="v" id="sda"></span></div>`;
+    <div class="verdict"><div><span class="lbl">Recommended action</span><b>${c.action.replace(/_/g,' ')}</b></div><div class="conf"><span class="lbl">Confidence</span>${conf}</div></div>
+    <div class="evid"><span class="lbl">Evidence <span class="dim" style="font-weight:400">(times in blue jump the charts to that moment)</span></span>${ev}</div>
+    <details class="src"><summary>Space-side now, advisories and RFI text</summary>
+      <div class="space"><span>Now</span><span class="v" id="sda"></span></div>
+      ${sdaDetail(c)}</details>`;
+  el.querySelectorAll('button.ts').forEach(b=>b.onclick = ()=>{ playing=false; $('play').innerHTML = ICON_PLAY; t = Math.max(0, Math.min(clip.len, +b.dataset.s)); });
   el.classList.remove('fresh'); void el.offsetWidth; el.classList.add('fresh');
   el.scrollTop = 0;
 }
@@ -418,7 +669,7 @@ document.addEventListener('keydown', e=>{
   if(e.key==='ArrowRight') t = Math.min(clip.len, t+30);
   if(e.key==='ArrowLeft') t = Math.max(0, t-30);
   if(e.key==='r') $('mode').children[mode==='raw'?1:0].click();
-  const n = +e.key; if(n>=1 && n<=B.clips.length) select(n-1);
+  const n = +e.key; if(n>=1 && n<=visible.length) select(visible[n-1]);
 });
 function wireFile(){
   $('file').onchange = async e => { B = JSON.parse(await e.target.files[0].text()); location.hash=''; init(); };
