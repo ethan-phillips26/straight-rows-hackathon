@@ -6,7 +6,7 @@ start, end, tractors, cause class, action, confidence, evidence. Detections cove
 evaluation window (2026-05-06T00:00Z to 2026-05-07T00:00Z).
 
 Results are retrospective: detectors use the whole evaluation window at once, so onsets are not
-real-time reportable. Repo: `<repo url>` · GitHub: `<handle>`
+real-time reportable. Repo: `https://github.com/ethan-phillips26/straight-rows-hackathon` · GitHub: `ethan-phillips26`
 
 ## Setup and run
 
@@ -23,8 +23,8 @@ python starter/scripts/get_data.py          # downloads organizers' zip, verifie
 Regenerate `submission.json`:
 
 ```bash
-python scripts/run_all.py --data starter/data --out submission.json --github-handle <handle> --repo-url <repo url>
-# same thing plus validation: make submission HANDLE=<handle> REPO=<repo url>   (also: make test, make dev, make sweep)
+python scripts/run_all.py --data starter/data --out submission.json --github-handle ethan-phillips26 --repo-url https://github.com/ethan-phillips26/straight-rows-hackathon
+# same thing plus validation: make submission HANDLE=ethan-phillips26 REPO=https://github.com/ethan-phillips26/straight-rows-hackathon   (also: make test, make dev, make sweep)
 python starter/submission/validate_submission.py submission.json    # expect: OK
 ```
 
@@ -54,8 +54,6 @@ antenna fault on the same tractor (TRN-06 in TRN-09), multipath inside a storm (
 detected on residuals after removing the fleet-wide effect and reported as a separate detection.
 
 ## Approach
-
-<!-- Update to match the final code. -->
 
 1. `features.py`: builds three tables from the telemetry and SDA feeds (`build_features`). A 1 Hz table has each tractor's
    value minus the fleet median (separates regional from local causes), its C/N0 drop versus its own quiet baseline,
@@ -117,8 +115,6 @@ agrees with a jamming call. The last evidence line of every detection lists its 
 12 dev episodes cannot support one, and the dev result is in-sample.
 
 ## Failure modes
-
-<!-- TODO: update from dev errors. -->
 
 - Onset of slow ramps (spoofing XTE leaves the noise floor gradually): start is back-extrapolated, error of minutes possible.
 - Simultaneous onset of two causes (e.g. jammer and storm): fleet-wide subtraction cannot separate them reliably.
