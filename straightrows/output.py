@@ -20,8 +20,8 @@ CLASS_ACTION = {
     "EQUIPMENT_FAULT": "SERVICE_MACHINE_OTHERS_CONTINUE",
     "MULTIPATH": "CONTINUE_FALSE_ALARM",
 }
-# The validator's limit is 500; keep a margin so a late extra detection cannot break the file.
-MAX_DETECTIONS = 495
+# The validator's limit (starter/submission/validate_submission.py). Eval emits 493, so there is room for 7 more.
+MAX_DETECTIONS = 500
 
 
 @dataclass
@@ -75,7 +75,9 @@ def build_submission(detections, github_handle, repo_url, display_name=None):
     Raises ValueError listing every problem if the result would fail the organizers' validator.
     """
     if len(detections) > MAX_DETECTIONS:
-        raise ValueError(f"{len(detections)} detections; limit is {MAX_DETECTIONS} (validator allows 500)")
+        raise ValueError(f"{len(detections)} detections; the validator's limit is {MAX_DETECTIONS}. Almost all are "
+                         f"one-per-pass MULTIPATH detections (docs/LOG.md, option A): check for a new cause class "
+                         f"firing everywhere, or drop the lowest-confidence MULTIPATH passes.")
     rows = sorted((_to_dict(d) for d in detections),
                   key=lambda r: (r["start"], r["end"], r["class"], r["tractors"]))
     participant = {"github_handle": github_handle}

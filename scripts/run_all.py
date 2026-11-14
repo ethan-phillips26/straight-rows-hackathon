@@ -25,8 +25,8 @@ def run(data, window=(EVAL_START, EVAL_END)):
     tele = load.load_telemetry(data)
     sda = load.load_sda(data)
     sec, minute, passes = features.build_features(tele, sda)
-    dets = detect.detect_all(sec, minute, passes, window)      # independent detector per cause class
-    return attribute.attribute(dets, sda)                      # class, action, confidence, evidence
+    eps = detect.detect_all(sec, minute, passes, window)       # independent detector per cause class, clipped to window
+    return attribute.attribute(eps, minute, sda)               # class, action, confidence, evidence
 
 
 def main():
