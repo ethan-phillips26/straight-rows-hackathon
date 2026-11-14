@@ -5,7 +5,7 @@ PYTHON ?= .venv/bin/python
 DATA   ?= starter/data
 OUT    ?= submission.json
 
-.PHONY: submission validate test dev sweep
+.PHONY: submission validate test dev sweep explorer
 
 submission:
 	@test -n "$(HANDLE)" -a -n "$(REPO)" || (echo "usage: make submission HANDLE=<github-handle> REPO=<repo-url>"; exit 1)
@@ -23,3 +23,6 @@ dev:
 
 sweep:
 	$(PYTHON) scripts/sweep_thresholds.py
+
+explorer:
+	$(PYTHON) scripts/make_explorer.py --data $(DATA) --detections $(OUT)
