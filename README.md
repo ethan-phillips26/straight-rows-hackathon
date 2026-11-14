@@ -24,6 +24,7 @@ Regenerate `submission.json`:
 
 ```bash
 python scripts/run_all.py --data starter/data --out submission.json --github-handle <handle> --repo-url <repo url>
+# same thing plus validation: make submission HANDLE=<handle> REPO=<repo url>   (also: make test, make dev, make sweep)
 python starter/submission/validate_submission.py submission.json    # expect: OK
 ```
 
@@ -102,7 +103,7 @@ Per-class precision/recall and onset errors: `python scripts/run_dev.py`.
 **Threshold sensitivity** (`python scripts/sweep_thresholds.py`, each constant x0.8 and x1.2, strict criterion: right class,
 exact tractor set, onset within 5 min, no false positive). All but one constant leave dev at 40.00 and strict-ok at both
 ends. The exception is the storm line `STORM_CN0_AT_S4_0` (42.7 dB): a percentage is the wrong unit, because 20 % is
-8.5 dB. In dB the dev result holds from -3.5 to +3.75 dB, against a measured residual of at most 0.53 dB on the three
+8.5 dB. In dB the dev result holds from -3.75 to +3.75 dB, against a measured residual of at most 0.53 dB on the three
 storm episodes (so about 6x). Earlier notes said "every threshold swept x0.8/x1.2: no change"; that was true for the
 diagnostic score only and is superseded by this paragraph.
 
@@ -133,7 +134,7 @@ agrees with a jamming call. The last evidence line of every detection lists its 
   by the same offset are found through their cross-track error, with the lockstep offset only locating the episode.
 - A uniform three-tractor jam that happens to sit exactly on the S4-predicted storm line cannot be told from a storm
   with farm data alone.
-- The storm line (C/N0 = 42.7 - 17.7 x S4) is fitted on two storms; its tolerance is about +-3.5 dB (see Results).
+- The storm line (C/N0 = 42.7 - 17.7 x S4) is fitted on two storms; its tolerance is about +-3.75 dB (see Results).
 - Lines to be ready to explain: the lockstep mode picking in `features.py`, the run-splitting idiom in `find_runs`, and the
   600 s cap on the spoof onset back-extrapolation (comments in the code say why).
 

@@ -60,7 +60,8 @@ def test_baseline_from_the_storm_day_alone_gives_the_same_detections(raw):
 @pytest.mark.parametrize("offset_db", [-3.0, 3.0])
 def test_storm_level_line_tolerates_3_db(raw, monkeypatch, offset_db):
     """The storm line (42.7 - 17.7*S4) is fitted on two storms. Its residual on dev is under 0.6 dB, and the
-    dev result holds for an intercept error of -6 to +3.5 dB (at +4 dB the whole storm becomes "jamming")."""
+    dev result holds for an intercept error of -3.75 to +3.75 dB (beyond that the storm is taken for jamming).
+    (At review time the low side was -6 dB; the storm level check added for review item 2 tightened it.)"""
     tele, sda = raw
     dev = tele[tele.ts < "2026-05-06"]
     sec, minute, passes = build_features(dev, sda)

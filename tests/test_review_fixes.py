@@ -97,3 +97,65 @@ def test_multipath_in_a_storm_is_not_penalised_for_the_storms_xte():
     assert attribute.confidence(dip, _sda(s4=0.05), [])[0] == 0.90 - 0.20              # nothing explains the XTE
     text = " ".join(attribute.attribute(pd.DataFrame([storm, dip]), _minute(), _sda(s4=0.5))[1].evidence)
     assert "reflect the overlapping SPACE_WEATHER detection" in text and "no storm" not in text
+
+
+# ---- second review round (docs/LOG.md, hour 11): side effects of the first fixes ---------------------
+def test_spoof_with_noisy_xte_on_every_tractor_still_blames_only_the_spoofed_one():
+    """A jam makes |XTE| large on all three; the spoofed tractor's XTE is then ABOVE its offset, which is not a mismatch."""
+    tele = synthetic_fleet(n=14400)
+    m = between(tele, "2026-05-04T12:00", "2026-05-04T12:30", ["T2"])
+    tele.loc[m, "lon"] += 4.0 / F.M_PER_DEG_LON
+    tele.loc[between(tele, "2026-05-04T12:00", "2026-05-04T12:30"), "cross_track_error_m"] = 3.0   # jam noise, all three
+    tele.loc[m, "cross_track_error_m"] = 7.0                                                        # noise + the spoof
+    eps = D.detect_spoofing(F.second_features(tele))
+    assert len(eps) == 1 and eps[0]["tractors"] == ["T2"] and eps[0]["stats"]["xte_mismatch"] is False
+
+
+def test_two_tractors_spoofed_by_different_offsets_are_each_reported_once():
+    tele = synthetic_fleet(n=14400)
+    for tractor, metres in [("T1", 6.0), ("T2", 10.0)]:
+        m = between(tele, "2026-05-04T12:00", "2026-05-04T12:30", [tractor])
+        tele.loc[m, "lon"] += metres / F.M_PER_DEG_LON
+        tele.loc[m, "cross_track_error_m"] = metres
+    eps = D.detect_spoofing(F.second_features(tele))
+    assert sorted(tuple(e["tractors"]) for e in eps) == [("T1",), ("T2",)]
+
+
+def test_storm_survives_a_non_uniform_jam_that_covers_most_of_it():
+    """3 h storm (uniform, on the S4 line) with a 2 h jam of 9 / 5 / 0 dB on top: both must be reported."""
+    tele = synthetic_fleet(n=36000)          # 10 h, so the 3 h storm is a minority and the median baseline stays quiet
+    s4, a, b = 0.45, "2026-05-04T11:30", "2026-05-04T14:30"
+    storm_level = D.STORM_CN0_AT_S4_0 - D.STORM_CN0_PER_S4 * s4
+    tele.loc[between(tele, a, b), "mean_cn0_dbhz"] = storm_level
+    for tractor, drop in [("T1", 9.0), ("T2", 5.0)]:
+        tele.loc[between(tele, "2026-05-04T12:00", "2026-05-04T14:00", [tractor]), "mean_cn0_dbhz"] -= drop
+    tele["lat"] = 46.900                                   # keep the whole run out of the headland zone
+    minute = F.minute_features(F.second_features(tele)).assign(s4=0.05)
+    minute.loc[(minute.ts >= T(a)) & (minute.ts < T(b)), "s4"] = s4
+    storms, jams = D.detect_storms(minute), D.detect_jamming(minute)
+    assert [(e["start"], e["end"]) for e in storms] == [(T(a), T(b))]
+    assert len(jams) == 1 and jams[0]["tractors"] == ["T1", "T2"]
+    assert (jams[0]["start"], jams[0]["end"]) == (T("2026-05-04T12:00"), T("2026-05-04T14:00"))
+
+
+def test_antenna_fault_starting_just_before_a_jam_keeps_its_start():
+    """Fault 11:24-12:48, jam 11:36-12:12: only 12 min of fault before the jam, less than EQUIP_MIN_MIN."""
+    tele = synthetic_fleet(n=14400)
+    fault = between(tele, "2026-05-04T11:24", "2026-05-04T12:48", ["T1"])
+    tele.loc[fault & (tele.ts.dt.second % 5 == 0), "min_cn0_dbhz"] -= 8.0
+    tele.loc[between(tele, "2026-05-04T11:36", "2026-05-04T12:12"), ["mean_cn0_dbhz", "min_cn0_dbhz"]] -= 10.0
+    sec = F.second_features(tele)
+    jam = D.detect_jamming(F.minute_features(sec).assign(s4=0.05))
+    eps = D.detect_equipment(sec, jam)
+    assert [(e["start"], e["end"], e["tractors"]) for e in eps] == [(T("2026-05-04T11:24"), T("2026-05-04T12:48"), ["T1"])]
+
+
+def test_a_few_stray_dropout_minutes_around_a_jam_are_not_a_fault():
+    """6 min of dropouts before and 6 min after a jam: 12 min outside the jam is under EQUIP_MIN_MIN, so nothing."""
+    tele = synthetic_fleet(n=14400)
+    stray = between(tele, "2026-05-04T11:30", "2026-05-04T11:36", ["T1"]) | between(tele, "2026-05-04T12:12", "2026-05-04T12:18", ["T1"])
+    tele.loc[stray & (tele.ts.dt.second % 5 == 0), "min_cn0_dbhz"] -= 8.0
+    tele.loc[between(tele, "2026-05-04T11:36", "2026-05-04T12:12"), ["mean_cn0_dbhz", "min_cn0_dbhz"]] -= 10.0
+    sec = F.second_features(tele)
+    jam = D.detect_jamming(F.minute_features(sec).assign(s4=0.05))
+    assert len(jam) == 1 and D.detect_equipment(sec, jam) == []

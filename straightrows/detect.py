@@ -30,18 +30,20 @@ STORM_MIN_MIN = 30          # shortest storm slot run we trust (dev storms are 1
 # Fleet C/N0 during a storm is linear in S4 (FINDINGS 0.4, r = -0.998). Used to subtract the storm level so
 # jamming inside a storm (TRN-05) shows up as an EXTRA drop, and to check a "storm" really sits on that line.
 # WEAK: fitted on two storms. FINDINGS quotes 42.7 - 17.7*S4; a refit on working minutes gives 42.90 - 18.02*S4
-# (same within 0.2 dB). Judge its tolerance in dB, not percent (review item 5): the intercept tolerates -6 to
-# +3.5 dB before dev changes, against a measured residual of at most 0.53 dB.
+# (same within 0.2 dB). Judge its tolerance in dB, not percent (review item 5): the intercept tolerates -3.75 to
+# +3.75 dB before dev changes (scripts/sweep_thresholds.py), against a measured residual of at most 0.53 dB.
 STORM_CN0_AT_S4_0 = 42.7
 STORM_CN0_PER_S4 = 17.7
 # A real storm hits all three tractors alike (spread <= 0.2 dB; 0.4 dB even with jamming inside, TRN-05) and the
-# fleet sits on the S4 line (residual <= 0.53 dB). An episode whose MEDIAN spread or level error is above these
-# is a non-uniform effect that merely coincides with elevated S4, i.e. jamming (review item 2). Medians, so a
-# jam inside a long storm (TRN-05, 20 % of its minutes) does not spoil the storm it sits in. The spread check is
-# the one that does the work; the level check is deliberately loose (4 dB, the smallest jam we report) so it is
-# never tighter than the +-3 dB tolerance the storm line already has (tests/test_review_robustness.py).
+# fleet sits on the S4 line (residual <= 0.53 dB). A minute that passes both limits is a "clean" storm minute.
+# A run with too few clean minutes is a non-uniform effect that merely coincides with elevated S4, i.e. jamming
+# (review item 2). Only a quarter of the run has to be clean, so a jam inside a storm does not erase the storm
+# even when it covers most of it (TRN-05 covers 20 % of TRN-02; real storms are ~100 % clean outside jams, and a
+# jam with no storm underneath is ~0 % clean). The spread limit does the work; the level limit is deliberately
+# loose (4 dB, the smallest jam we report) so it is never tighter than the +-3 dB tolerance of the storm line.
 STORM_MAX_SPREAD_DB = 1.5
 STORM_MAX_LEVEL_ERR_DB = 4.0
+STORM_MIN_CLEAN_FRAC = 0.25
 
 # Jamming: extra C/N0 drop beyond the storm level. 4.35 decides who is "affected" by an episode, using this
 # module's own statistic (episode-mean excess drop): TRN-04's labeled T1 is 5.30 dB and its unlabeled T2 is
@@ -134,17 +136,19 @@ def storm_flags(minute):
     """Per-minute table (ts, fleet_drop, s4, storm) for working minutes.
 
     A minute is a storm minute when the fleet-median drop is big and S4 is elevated. Each run of such minutes that
-    is long enough to be an episode must also look like a storm: tractors alike, fleet on the S4 line (see
-    STORM_MAX_SPREAD_DB). A run that fails is NOT a storm, so the jamming detector sees its full drop.
+    is long enough to be an episode must also look like a storm: in at least STORM_MIN_CLEAN_FRAC of its minutes
+    the tractors are alike and the fleet is on the S4 line. A run that fails is NOT a storm, so the jamming
+    detector sees its full drop.
     """
     fleet = minute.groupby("ts").agg(fleet_drop=("cn0_drop", "median"), s4=("s4", "first"), fleet_cn0=("cn0", "median"),
                                      drop_max=("cn0_drop", "max"), drop_min=("cn0_drop", "min")).reset_index()
     fleet["spread"] = fleet.drop_max - fleet.drop_min
     fleet["storm"] = (fleet.fleet_drop >= STORM_MIN_DROP_DB) & (fleet.s4 >= STORM_MIN_S4)
+    level_err = (fleet.fleet_cn0 - (STORM_CN0_AT_S4_0 - STORM_CN0_PER_S4 * fleet.s4)).abs()
+    clean = (fleet.spread <= STORM_MAX_SPREAD_DB) & (level_err <= STORM_MAX_LEVEL_ERR_DB)
     for start, end in find_runs(fleet.ts[fleet.storm], MINUTE, 2 * MINUTE, STORM_MIN_MIN * MINUTE):
         run = (fleet.ts >= start) & (fleet.ts < end)
-        level_err = (fleet.fleet_cn0[run] - (STORM_CN0_AT_S4_0 - STORM_CN0_PER_S4 * fleet.s4[run])).abs().median()
-        if fleet.spread[run].median() > STORM_MAX_SPREAD_DB or level_err > STORM_MAX_LEVEL_ERR_DB:
+        if clean[run].mean() < STORM_MIN_CLEAN_FRAC:
             fleet.loc[run, "storm"] = False
     return fleet
 
@@ -202,7 +206,7 @@ def detect_jamming(minute):
 # spoofing: one tractor's reported position leaves the lockstep line
 # ----------------------------------------------------------------------------------------------
 def detect_spoofing(sec):
-    out = []
+    direct, reassigned = [], []     # direct: the flagged tractor's own XTE shows the offset; reassigned: it does not
     for tr, g in sec.groupby("tractor_id", sort=True):
         hit = g[g.lon_dev_abs_m >= SPOOF_MIN_DEV_M]
         for start, end in find_runs(hit.ts, SECOND, SPOOF_MAX_GAP_S * SECOND, SPOOF_MIN_MIN * MINUTE):
@@ -219,21 +223,34 @@ def detect_spoofing(sec):
             lead = min(max(intercept / slope, 0.0), 600.0) if is_ramp else 0.0
             onset = start - pd.Timedelta(seconds=lead)
             whole = g[(g.ts >= start) & (g.ts < end)]
-            tractors, xte_mismatch = [tr], False
-            if abs(whole.lon_dev_abs_m.median() - whole.axte.median()) > SPOOF_XTE_TOL_M:
-                # This tractor's own guidance monitor does not see the offset. Because the offset is measured against
-                # the other two tractors, two tractors displaced together make the healthy third look displaced.
-                # Blame the tractors whose cross-track error actually ramps; if none does, keep it but say so.
+            tractors, xte_mismatch, own_xte_agrees = [tr], False, True
+            # One-sided on purpose: only an XTE clearly SMALLER than the offset says "my guidance monitor does not see
+            # this". A larger XTE is normal when a storm or jam adds noise on top of the spoof.
+            if whole.axte.median() < whole.lon_dev_abs_m.median() - SPOOF_XTE_TOL_M:
+                # Because the offset is measured against the other two tractors, two tractors displaced together make
+                # the healthy third look displaced. Blame the tractors whose cross-track error actually shows it;
+                # if none does, keep this tractor but say so.
+                own_xte_agrees = False
                 window = sec[(sec.ts >= start) & (sec.ts < end)]
                 xte = window.groupby("tractor_id").axte.median()
                 blamed = xte.index[xte >= 0.5 * whole.lon_dev_abs_m.median()].tolist()
                 tractors, xte_mismatch = (blamed, False) if blamed else ([tr], True)
             xte_max = sec[(sec.ts >= start) & (sec.ts < end) & sec.tractor_id.isin(tractors)].axte.max()
-            out.append(_episode("SPOOFING", onset, end, tractors,
+            ep = _snap(_episode("SPOOFING", onset, end, tractors,
                                 max_offset_m=float(whole.lon_dev_abs_m.max()),
                                 ramp_m_per_min=float(slope * 60), first_cross=start,
                                 xte_max_m=float(xte_max), xte_mismatch=xte_mismatch))
-    return [_snap(e) for e in out]
+            (direct if own_xte_agrees else reassigned).append(ep)
+    # A reassigned episode repeats what a direct one already says when the blamed tractors were also caught on their
+    # own (two tractors spoofed by DIFFERENT offsets: each is flagged directly, and the healthy third points at both).
+    # Keep it only for tractors that have no overlapping direct episode, so nothing is reported twice.
+    out = list(direct)
+    for ep in reassigned:
+        covered = {t for d in out for t in d["tractors"] if d["start"] < ep["end"] and ep["start"] < d["end"]}
+        ep["tractors"] = [t for t in ep["tractors"] if t not in covered]
+        if ep["tractors"]:
+            out.append(ep)
+    return out
 
 
 # ----------------------------------------------------------------------------------------------
@@ -277,6 +294,12 @@ def _join_across_jams(runs, jam_spans):
     return merged
 
 
+def _minutes_outside(start, end, spans):
+    """Length of [start, end) not covered by any of ``spans`` (the jam part of a joined run proves nothing)."""
+    inside = sum((min(end, je) - max(start, js) for js, je in spans if min(end, je) > max(start, js)), pd.Timedelta(0))
+    return (end - start) - inside
+
+
 def detect_equipment(sec, jam=()):
     s = add_dropout_flag(sec, jam)
     out = []
@@ -284,10 +307,14 @@ def detect_equipment(sec, jam=()):
         frac = _flag_minutes(s, col)
         for tr, g in frac.groupby("tractor_id", sort=True):
             hit = g[g.frac >= thresh]
-            runs = find_runs(hit.minute, MINUTE, EQUIP_MAX_GAP_MIN * MINUTE, EQUIP_MIN_MIN * MINUTE)
             spans = [(e["start"], e["end"]) for e in jam if tr in e["tractors"]]
             if subtype == "antenna":
-                runs = _join_across_jams(runs, spans)
+                # Join first, THEN apply the minimum duration (counting only time outside the jam). The other order
+                # would throw away a short piece before the jam and report the fault as starting after it.
+                runs = _join_across_jams(find_runs(hit.minute, MINUTE, EQUIP_MAX_GAP_MIN * MINUTE, 0 * MINUTE), spans)
+                runs = [(a, b) for a, b in runs if _minutes_outside(a, b, spans) >= EQUIP_MIN_MIN * MINUTE]
+            else:
+                runs = find_runs(hit.minute, MINUTE, EQUIP_MAX_GAP_MIN * MINUTE, EQUIP_MIN_MIN * MINUTE)
             for start, end in runs:
                 w = g[(g.minute >= start) & (g.minute < end)]
                 if subtype == "antenna":     # minutes inside a jam were masked to 0; do not let them dilute the rate

@@ -25,7 +25,7 @@ from straightrows.features import build_features  # noqa: E402
 from straightrows.load import load_sda, load_telemetry  # noqa: E402
 
 CONSTANTS = ["STORM_MIN_DROP_DB", "STORM_MIN_S4", "STORM_MIN_MIN", "STORM_CN0_AT_S4_0", "STORM_CN0_PER_S4",
-             "STORM_MAX_SPREAD_DB", "STORM_MAX_LEVEL_ERR_DB", "JAM_MINUTE_DROP_DB", "JAM_TRACTOR_DROP_DB", "JAM_MIN_MIN",
+             "STORM_MAX_SPREAD_DB", "STORM_MAX_LEVEL_ERR_DB", "STORM_MIN_CLEAN_FRAC", "JAM_MINUTE_DROP_DB", "JAM_TRACTOR_DROP_DB", "JAM_MIN_MIN",
              "JAM_MAX_GAP_MIN", "SPOOF_MIN_DEV_M", "SPOOF_MIN_MIN", "SPOOF_MAX_GAP_S", "SPOOF_RAMP_FIT_S", "SPOOF_XTE_TOL_M",
              "LINK_MIN_FRAC", "ANT_DIP_DB", "ANT_MIN_FRAC", "EQUIP_MIN_MIN", "EQUIP_MAX_GAP_MIN"]
 STORM_SHIFTS_DB = [-6.0, -3.0, 3.0, 3.5, 4.0]
