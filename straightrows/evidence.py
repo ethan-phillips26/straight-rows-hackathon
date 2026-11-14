@@ -11,6 +11,7 @@ Only the 1-minute table and the SDA feeds are used, so this stays cheap even for
 import numpy as np
 import pandas as pd
 
+from . import locate
 from .detect import JAM_TRACTOR_DROP_DB, STORM_MIN_S4
 from .features import M_PER_DEG_LAT, M_PER_DEG_LON, TRACTORS
 
@@ -200,7 +201,32 @@ def _jamming(ep, minute, sda, others):
     lines.append(f"Reported position stays on the formation line (max offset {pos.lon_dev_abs.max():.2f} m"
                  f"{_excluded_note(pos_skip, 'SPOOFING')}) -> the loss is signal, not a displaced position.")
     lines.append(_rfi_line(sda, ep, lat, lon, consistent=True))
+    loc = ep.get("location")
+    if isinstance(loc, dict):
+        lines.append(_location_line(loc, sda, ep))
     return lines
+
+
+def _location_line(loc, sda, ep):
+    """Where the fitted jammer is, how sure that is, and how it compares with an RFI report (if any)."""
+    where = (f"{loc['lat']:.4f}N {abs(loc['lon']):.4f}W, 95% error ellipse {loc['semi_major_km'] * 1000:.0f} x "
+             f"{loc['semi_minor_km'] * 1000:.0f} m (long axis bearing {loc['major_axis_bearing_deg']:.0f} deg)")
+    fit = (f"fit of C/N0 = a + b*log10(distance) to {loc['n_samples']} 10-s samples from all 3 tractors: "
+           f"RMSE {loc['rmse_db']:.2f} dB, b = {loc['slope_db_per_decade']:.1f} dB/decade (free space 20)")
+    if not loc["reliable"]:
+        return (f"Jammer location NOT reported: {fit}; {', '.join(loc['notes'])}.")
+    near = rfi_near(sda, ep)
+    if near.empty:
+        cross = "no RFI report to cross-check"
+    else:
+        x = near.assign(gap=(near.ts - ep["start"]).abs()).sort_values("gap").iloc[0]
+        km = locate.distance_km(loc["lat"], loc["lon"], x.centerLat, x.centerLon)
+        inside = ("inside" if km <= x.semiMinor_km else "within the long axis of" if km <= x.semiMajor_km else "outside")
+        cross = (f"{km:.1f} km from the {x['id']} centre, {inside} its {x.semiMajor_km:.1f} x {x.semiMinor_km:.1f} km ellipse "
+                 f"(orientation not given); the fit is far more precise than the report")
+    return (f"Fitted jammer position {where}; {fit}. The ellipse is the fit's precision under the path-loss model "
+            f"(statistical band {loc['stat_major_km'] * 1000:.0f} m + {loc['sensitivity_m']:.0f} m shift when refitting each half "
+            f"of the episode / dropping each tractor), not a surveyed truth; {cross}.")
 
 
 def _spoofing(ep, minute, sda, others):

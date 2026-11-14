@@ -14,7 +14,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from straightrows import attribute, detect, features, load, output  # noqa: E402
+from straightrows import attribute, detect, features, load, locate, output  # noqa: E402
 
 EVAL_START = pd.Timestamp("2026-05-06T00:00:00Z")
 EVAL_END = pd.Timestamp("2026-05-07T00:00:00Z")
@@ -26,6 +26,9 @@ def run(data, window=(EVAL_START, EVAL_END)):
     sda = load.load_sda(data)
     sec, minute, passes = features.build_features(tele, sda)
     eps = detect.detect_all(sec, minute, passes, window)       # independent detector per cause class, clipped to window
+    # Jammer position (with error ellipse) for each jamming episode; evidence.py turns it into a sentence.
+    eps["location"] = [locate.locate_jammer(tele, e.start, e.end) if e.kind == "JAMMING" else None
+                       for e in eps.itertuples()]
     return attribute.attribute(eps, minute, sda)               # class, action, confidence, evidence
 
 
