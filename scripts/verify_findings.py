@@ -632,6 +632,23 @@ def flag_seconds(tele):
     return f
 
 
+# Quiet working stretches in dev OTHER than the QUIET window the flag thresholds were read from.
+# Checking the flags here is an out-of-sample test that the thresholds do not fire on ordinary data.
+HELD_OUT_QUIET = [("2026-05-04T11:00Z", "2026-05-04T12:00Z"), ("2026-05-04T14:02Z", "2026-05-04T16:28Z"),
+                  ("2026-05-04T21:38Z", "2026-05-05T00:28Z"), ("2026-05-05T16:00Z", "2026-05-05T19:00Z"),
+                  ("2026-05-05T22:08Z", "2026-05-06T00:00Z")]
+
+
+def held_out_quiet_flags(tele, labels, flags):
+    """Count flagged seconds in HELD_OUT_QUIET (working, >= 2 min away from any label on that tractor)."""
+    near_label = label_mask(tele, labels, pad=pd.Timedelta(minutes=2))
+    m = pd.Series(False, index=tele.index)
+    for a, b in HELD_OUT_QUIET:
+        m |= (tele.ts >= ts(a)) & (tele.ts < ts(b))
+    m &= tele.working & ~near_label
+    return {"seconds": int(m.sum()), "flagged": {k: int(v) for k, v in flags[m].sum().items()}}
+
+
 def unusual_runs(tele, flags, start, end, min_flagged=3, gap=pd.Timedelta(minutes=2)):
     """Per tractor: minutes with >= min_flagged flagged seconds, merged across gaps <= `gap`.
 
@@ -761,7 +778,11 @@ def main():
         print(f"  {k:10s} {v}")
     flags = flag_seconds(tele)
     qmask = (tele.ts >= QUIET[0]) & (tele.ts < QUIET[1])
-    print("Flagged-second rate in QUIET window:", flags[qmask].mean().round(5).to_dict())
+    print("Flagged-second rate in QUIET window (circular: thresholds were set from it):",
+          flags[qmask].mean().round(5).to_dict())
+    ho = held_out_quiet_flags(tele, labels, flags)
+    print(f"Held-out quiet working seconds (not used to set thresholds): {ho['seconds']}, "
+          f"flagged: {ho['flagged']}")
     dr = outside_labels(unusual_runs(tele, flags, DEV_START, EVAL_START), labels)
     dr["start"], dr["end"] = dr.start.map(fmt), dr.end.dt.strftime("%H:%M")
     print("\nAll runs (dev):")

@@ -98,8 +98,15 @@ def test_quiet_reference_is_clean(d):
     assert q["fix_values"] == ["RTK_FIXED"] and q["link_down"] == 0
     assert q["sats_values"] == [11, 12, 13]
     assert q["mean_cn0_min"] >= 42.5
-    rate = d["flags"][(d["tele"].ts >= vf.QUIET[0]) & (d["tele"].ts < vf.QUIET[1])].mean()
-    assert (rate == 0).all()
+
+
+@needs_data
+def test_flags_hold_out_of_sample(d):
+    # The flag thresholds were read off the QUIET window, so testing them there would be circular.
+    # Check them on other quiet dev stretches instead: essentially nothing should fire.
+    ho = vf.held_out_quiet_flags(d["tele"], d["labels"], d["flags"])
+    assert ho["seconds"] > 100_000
+    assert sum(ho["flagged"].values()) / ho["seconds"] < 1e-4
 
 
 @needs_data
