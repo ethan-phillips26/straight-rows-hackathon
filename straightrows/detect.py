@@ -21,19 +21,33 @@ MINUTE = pd.Timedelta(minutes=1)
 SECOND = pd.Timedelta(seconds=1)
 
 # ---- tunables, each with the gap it sits in -------------------------------------------------------
-# Storm: fleet-median C/N0 drop vs quiet baseline. Smallest storm step is 7.5 dB; quiet never exceeds ~2 dB.
+# Storm: fleet-median C/N0 drop vs quiet baseline. Smallest storm step is 7.5 dB; quiet working time never exceeds 0.99 dB.
 STORM_MIN_DROP_DB = 4.0
 # Storm needs S4 elevated too. Quiet S4 <= 0.094, every impacted slot >= 0.317; 0.2 is inside the gap and
 # is what separates a uniform storm drop from a (quiet-S4) jamming drop that happens to hit all 3 tractors.
 STORM_MIN_S4 = 0.2
 STORM_MIN_MIN = 30          # shortest storm slot run we trust (dev storms are 180 and 300 min)
-# Fleet C/N0 during a storm is linear in S4 (FINDINGS 0.4, r = -0.998). Used only to subtract the storm
-# level so jamming inside a storm (TRN-05) shows up as an EXTRA drop. WEAK: fitted on two storms.
+# Fleet C/N0 during a storm is linear in S4 (FINDINGS 0.4, r = -0.998). Used to subtract the storm level so
+# jamming inside a storm (TRN-05) shows up as an EXTRA drop, and to check a "storm" really sits on that line.
+# WEAK: fitted on two storms. FINDINGS quotes 42.7 - 17.7*S4; a refit on working minutes gives 42.90 - 18.02*S4
+# (same within 0.2 dB). Judge its tolerance in dB, not percent (review item 5): the intercept tolerates -6 to
+# +3.5 dB before dev changes, against a measured residual of at most 0.53 dB.
 STORM_CN0_AT_S4_0 = 42.7
 STORM_CN0_PER_S4 = 17.7
+# A real storm hits all three tractors alike (spread <= 0.2 dB; 0.4 dB even with jamming inside, TRN-05) and the
+# fleet sits on the S4 line (residual <= 0.53 dB). An episode whose MEDIAN spread or level error is above these
+# is a non-uniform effect that merely coincides with elevated S4, i.e. jamming (review item 2). Medians, so a
+# jam inside a long storm (TRN-05, 20 % of its minutes) does not spoil the storm it sits in. The spread check is
+# the one that does the work; the level check is deliberately loose (4 dB, the smallest jam we report) so it is
+# never tighter than the +-3 dB tolerance the storm line already has (tests/test_review_robustness.py).
+STORM_MAX_SPREAD_DB = 1.5
+STORM_MAX_LEVEL_ERR_DB = 4.0
 
-# Jamming: extra C/N0 drop beyond the storm level. Labeled tractors dropped >= 5.7 dB, the one unlabeled
-# tractor 3.0 dB, so 4.35 (their midpoint) decides who is "affected". Minute flags use the looser 4.0.
+# Jamming: extra C/N0 drop beyond the storm level. 4.35 decides who is "affected" by an episode, using this
+# module's own statistic (episode-mean excess drop): TRN-04's labeled T1 is 5.30 dB and its unlabeled T2 is
+# 2.66 dB, so 4.35 lies between them (their midpoint is 3.98). ONE dev example supports it (WEAK, review items
+# 5-6). Eval 18:30 T2 measures 5.36, like dev's labeled T1, so it is included; attribute.py lowers the confidence.
+# Minute flags use the looser 4.0.
 JAM_MINUTE_DROP_DB = 4.0
 JAM_TRACTOR_DROP_DB = 4.35
 JAM_MIN_MIN = 24            # dev jamming lasts 36-42 min
@@ -45,6 +59,10 @@ SPOOF_MIN_DEV_M = 0.5
 SPOOF_MIN_MIN = 10
 SPOOF_MAX_GAP_S = 60
 SPOOF_RAMP_FIT_S = 300      # fit the ramp over the first 5 min after the threshold crossing
+# A spoofed tractor's own guidance monitor sees the displacement: median |XTE| matches median |lon offset|
+# (dev 3/3 within 0.33 m). If it does not, the offset is an artifact of the relative (lockstep) measure and the
+# tractors whose XTE ramps are blamed instead (review item 3). 1.0 m sits between 0.33 m and the 4 m+ plateaus.
+SPOOF_XTE_TOL_M = 1.0
 
 # Equipment, link type: quiet has zero link-down seconds. A minute counts with >= 3 s (5 %) down.
 LINK_MIN_FRAC = 0.05
@@ -54,8 +72,8 @@ ANT_MIN_FRAC = 0.05
 EQUIP_MIN_MIN = 18
 EQUIP_MAX_GAP_MIN = 5
 
-# Multipath: min-C/N0 dip while in the north-headland zone. Measured dips are 3.5-10.9 dB.
-MP_MIN_DROP_DB = 2.0
+# Multipath: one detection per north-headland pass, whatever the dip depth (review item 9: a depth threshold
+# could only ever lose the pass the scorer credits). The depth is kept as evidence and lowers confidence.
 
 GRID_MIN = 6                # labels start/end on a 6-minute grid (FINDINGS 0.1)
 GRID_TOL = pd.Timedelta(minutes=2)
@@ -81,6 +99,8 @@ def find_runs(times, step, max_gap, min_dur):
     times = pd.DatetimeIndex(times).sort_values()
     if len(times) == 0:
         return []
+    # diff() gives the gap between neighbours; a gap wider than max_gap + step starts a new run. flatnonzero finds
+    # those positions (+1 = index of the first element after the gap) and np.split cuts the index list there.
     breaks = np.flatnonzero(np.diff(times.values) > (max_gap + step).to_timedelta64()) + 1
     runs = []
     for chunk in np.split(np.arange(len(times)), breaks):
@@ -111,9 +131,21 @@ def _episode(kind, start, end, tractors, **stats):
 # storm: the whole fleet drops together while S4 is elevated
 # ----------------------------------------------------------------------------------------------
 def storm_flags(minute):
-    """Per-minute table (ts, fleet_drop, s4, storm) for working minutes."""
-    fleet = minute.groupby("ts").agg(fleet_drop=("cn0_drop", "median"), s4=("s4", "first")).reset_index()
+    """Per-minute table (ts, fleet_drop, s4, storm) for working minutes.
+
+    A minute is a storm minute when the fleet-median drop is big and S4 is elevated. Each run of such minutes that
+    is long enough to be an episode must also look like a storm: tractors alike, fleet on the S4 line (see
+    STORM_MAX_SPREAD_DB). A run that fails is NOT a storm, so the jamming detector sees its full drop.
+    """
+    fleet = minute.groupby("ts").agg(fleet_drop=("cn0_drop", "median"), s4=("s4", "first"), fleet_cn0=("cn0", "median"),
+                                     drop_max=("cn0_drop", "max"), drop_min=("cn0_drop", "min")).reset_index()
+    fleet["spread"] = fleet.drop_max - fleet.drop_min
     fleet["storm"] = (fleet.fleet_drop >= STORM_MIN_DROP_DB) & (fleet.s4 >= STORM_MIN_S4)
+    for start, end in find_runs(fleet.ts[fleet.storm], MINUTE, 2 * MINUTE, STORM_MIN_MIN * MINUTE):
+        run = (fleet.ts >= start) & (fleet.ts < end)
+        level_err = (fleet.fleet_cn0[run] - (STORM_CN0_AT_S4_0 - STORM_CN0_PER_S4 * fleet.s4[run])).abs().median()
+        if fleet.spread[run].median() > STORM_MAX_SPREAD_DB or level_err > STORM_MAX_LEVEL_ERR_DB:
+            fleet.loc[run, "storm"] = False
     return fleet
 
 
@@ -182,13 +214,25 @@ def detect_spoofing(sec):
             # A real ramp is ~SPOOF_MIN_DEV_M at the crossing. If the first flagged value is far above that,
             # the offset jumped (a step), there is no ramp to extend, and slope ~ 0 would give a huge lead.
             is_ramp = slope > 0 and ramp.lon_dev_abs_m.iloc[0] <= 2 * SPOOF_MIN_DEV_M
-            lead = min(max(intercept / slope, 0.0), 600.0) if is_ramp else 0.0  # line hits 0 at -intercept/slope s from the crossing
+            # The fitted line hits 0 at intercept/slope seconds BEFORE the crossing. Cap at 600 s (10 min): dev ramps are
+            # 0.11-0.25 m/min, so reaching 0.5 m takes 2-5 min; a larger lead means a bad fit, not a longer ramp.
+            lead = min(max(intercept / slope, 0.0), 600.0) if is_ramp else 0.0
             onset = start - pd.Timedelta(seconds=lead)
             whole = g[(g.ts >= start) & (g.ts < end)]
-            out.append(_episode("SPOOFING", onset, end, [tr],
+            tractors, xte_mismatch = [tr], False
+            if abs(whole.lon_dev_abs_m.median() - whole.axte.median()) > SPOOF_XTE_TOL_M:
+                # This tractor's own guidance monitor does not see the offset. Because the offset is measured against
+                # the other two tractors, two tractors displaced together make the healthy third look displaced.
+                # Blame the tractors whose cross-track error actually ramps; if none does, keep it but say so.
+                window = sec[(sec.ts >= start) & (sec.ts < end)]
+                xte = window.groupby("tractor_id").axte.median()
+                blamed = xte.index[xte >= 0.5 * whole.lon_dev_abs_m.median()].tolist()
+                tractors, xte_mismatch = (blamed, False) if blamed else ([tr], True)
+            xte_max = sec[(sec.ts >= start) & (sec.ts < end) & sec.tractor_id.isin(tractors)].axte.max()
+            out.append(_episode("SPOOFING", onset, end, tractors,
                                 max_offset_m=float(whole.lon_dev_abs_m.max()),
                                 ramp_m_per_min=float(slope * 60), first_cross=start,
-                                xte_max_m=float(whole.axte.max())))
+                                xte_max_m=float(xte_max), xte_mismatch=xte_mismatch))
     return [_snap(e) for e in out]
 
 
@@ -217,6 +261,22 @@ def _flag_minutes(sec, col):
     return g.groupby(["tractor_id", g.ts.dt.floor("min")])[col].mean().rename("frac").reset_index().rename(columns={"ts": "minute"})
 
 
+def _join_across_jams(runs, jam_spans):
+    """Merge two runs of one tractor when a jam it was in lies between them (review item 4).
+
+    Dropout seconds inside a jam are discarded (the jam's noise is not a fault), which leaves a hole in a fault
+    that really continued through the jam. Joining runs on both sides of that hole restores it.
+    """
+    gap = EQUIP_MAX_GAP_MIN * MINUTE
+    merged = []
+    for start, end in runs:
+        if merged and any(js - gap <= merged[-1][1] and start <= je + gap for js, je in jam_spans):
+            merged[-1] = (merged[-1][0], end)
+        else:
+            merged.append((start, end))
+    return merged
+
+
 def detect_equipment(sec, jam=()):
     s = add_dropout_flag(sec, jam)
     out = []
@@ -224,8 +284,15 @@ def detect_equipment(sec, jam=()):
         frac = _flag_minutes(s, col)
         for tr, g in frac.groupby("tractor_id", sort=True):
             hit = g[g.frac >= thresh]
-            for start, end in find_runs(hit.minute, MINUTE, EQUIP_MAX_GAP_MIN * MINUTE, EQUIP_MIN_MIN * MINUTE):
+            runs = find_runs(hit.minute, MINUTE, EQUIP_MAX_GAP_MIN * MINUTE, EQUIP_MIN_MIN * MINUTE)
+            spans = [(e["start"], e["end"]) for e in jam if tr in e["tractors"]]
+            if subtype == "antenna":
+                runs = _join_across_jams(runs, spans)
+            for start, end in runs:
                 w = g[(g.minute >= start) & (g.minute < end)]
+                if subtype == "antenna":     # minutes inside a jam were masked to 0; do not let them dilute the rate
+                    outside = w[[not any(js <= m < je for js, je in spans) for m in w.minute]]
+                    w = outside if len(outside) else w
                 out.append(_episode("EQUIPMENT_FAULT", start, end, [tr], subtype=subtype,
                                     flag_frac=float(w.frac.mean())))
     return [_snap(e) for e in out]
@@ -235,10 +302,9 @@ def detect_equipment(sec, jam=()):
 # multipath: one detection per tractor per north-headland pass (option A in docs/LOG.md)
 # ----------------------------------------------------------------------------------------------
 def detect_multipath(passes):
-    p = passes[passes.min_drop_db >= MP_MIN_DROP_DB]
     return [_episode("MULTIPATH", r.start, r.end, [r.tractor_id], min_drop_db=float(r.min_drop_db),
                      n_tractors_dipped=int(r.n_tractors_dipped), xte_in=float(r.xte_in))
-            for r in p.itertuples()]
+            for r in passes.itertuples()]
 
 
 # ----------------------------------------------------------------------------------------------
@@ -247,10 +313,31 @@ def _snap(e):
     return e
 
 
-def detect_all(sec, minute, passes):
-    """Run every detector; returns a DataFrame sorted by start time (deterministic order)."""
+EPISODE_COLUMNS = ["kind", "start", "end", "tractors", "stats"]
+
+
+def clip_to_window(df, window):
+    """Keep what overlaps ``window`` and clip it to the window's edges (review item 1).
+
+    Filtering on ``start`` alone would drop an episode that began the evening before the window (or lose the part
+    that a back-extrapolated spoof onset pushed earlier); clipping after snapping keeps the part that is inside.
+    """
+    start, end = window
+    df = df[(df.end > start) & (df.start < end)].copy()
+    df["start"], df["end"] = df.start.clip(lower=start), df.end.clip(upper=end)
+    return df[df.end > df.start].reset_index(drop=True)
+
+
+def detect_all(sec, minute, passes, window=None):
+    """Run every detector; returns a DataFrame sorted by start time (deterministic order).
+
+    With ``window=(start, end)`` the episodes are clipped to it. Features always use all the data.
+    """
     jam = detect_jamming(minute)
     eps = (detect_storms(minute) + jam + detect_spoofing(sec)
            + detect_equipment(sec, jam) + detect_multipath(passes))
-    df = pd.DataFrame(eps)
-    return df.sort_values(["start", "kind", "end"]).reset_index(drop=True)
+    df = pd.DataFrame(eps, columns=EPISODE_COLUMNS)
+    if df.empty:
+        return df
+    df = df.sort_values(["start", "kind", "end"]).reset_index(drop=True)
+    return clip_to_window(df, window) if window is not None else df

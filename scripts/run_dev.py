@@ -6,6 +6,7 @@ python scripts/run_dev.py            # print detections + dev score
 Confidence and evidence are placeholders here (attribute.py / evidence.py come later); this only checks
 WHICH windows/tractors/classes we find.
 """
+import json
 import sys
 from pathlib import Path
 
@@ -24,8 +25,7 @@ from straightrows.load import load_sda, load_telemetry  # noqa: E402
 def main(data=ROOT / "starter" / "data"):
     tele, sda = load_telemetry(data), load_sda(data)
     sec, minute, passes = build_features(tele, sda)
-    dets = detect_all(sec, minute, passes)
-    dets = dets[(dets.start >= eval_dev.DEV_START) & (dets.start < eval_dev.DEV_END)]
+    dets = detect_all(sec, minute, passes, (eval_dev.DEV_START, eval_dev.DEV_END))   # clipped, not start-filtered
 
     non_mp = dets[dets.kind != "MULTIPATH"]
     print(f"{len(dets)} detections ({len(dets) - len(non_mp)} multipath)")
@@ -35,7 +35,7 @@ def main(data=ROOT / "starter" / "data"):
     payload = [{"start": r.start.isoformat(), "end": r.end.isoformat(), "tractors": r.tractors, "class": r.kind,
                 "action": CLASS_ACTION[r.kind], "confidence": 0.5, "evidence": []} for r in dets.itertuples()]
     print()
-    eval_dev.print_report(eval_dev.score({"detections": payload}, __import__("json").loads(
+    eval_dev.print_report(eval_dev.score({"detections": payload}, json.loads(
         (data / "labels" / "train_episodes.json").read_text())))
 
 

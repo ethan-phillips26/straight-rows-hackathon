@@ -55,6 +55,9 @@ def add_lockstep_offset(tele):
             off = lon[a] - lon[b]
             # Most common offset = normal spacing. The "wrapped" spacing differs by ~0.009 deg (one field
             # width); a spoofed tractor is only metres (~1e-4 deg) off, so it can never be mistaken for it.
+            # value_counts ranks the (rounded) offsets by frequency: the top one is the normal spacing. Keep the next
+            # of the top 5 that is > 0.005 deg (~380 m) away as the "wrapped" spacing; 2e-5 deg (~1.5 m) is the
+            # tolerance for "same offset" when refining each mode to its exact median.
             counts = off.round(5).value_counts()
             modes = [m for i, m in enumerate(counts.index[:5]) if i == 0 or abs(m - counts.index[0]) > 0.005][:2]
             modes = np.array([off[(off - m).abs() < 2e-5].median() for m in modes])  # refine to the exact value
@@ -177,7 +180,8 @@ def headland_passes(sec, context_s=40):
     for tr, g in sec.groupby("tractor_id", sort=True):
         g = g.reset_index(drop=True)
         h = g.headland.to_numpy()
-        # run boundaries: positions where the flag changes
+        # run boundaries: positions where the flag changes. Padding with 0 at both ends makes every run start with
+        # a 0->1 step and end with a 1->0 step, so the edges alternate: even entries are starts, odd are ends.
         edge = np.flatnonzero(np.diff(np.r_[0, h.astype(int), 0]))
         for i0, i1 in zip(edge[::2], edge[1::2]):  # [i0, i1) is one pass
             inside = g.iloc[i0:i1]
@@ -195,7 +199,9 @@ def headland_passes(sec, context_s=40):
                 "xte_out": around.axte.median(),
                 "fleet_cn0_drop": inside.fleet_cn0_drop.median(),
             })
-    out = pd.DataFrame(rows).sort_values(["start", "tractor_id"]).reset_index(drop=True)
+    columns = ["tractor_id", "start", "end", "dip_s", "min_cn0_in", "min_cn0_out", "min_drop_db", "mean_drop_db",
+               "xte_in", "xte_out", "fleet_cn0_drop"]
+    out = pd.DataFrame(rows, columns=columns).sort_values(["start", "tractor_id"]).reset_index(drop=True)
     out["n_tractors_dipped"] = out.groupby("start").tractor_id.transform("nunique")
     return out
 
