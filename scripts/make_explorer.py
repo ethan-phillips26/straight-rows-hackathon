@@ -10,7 +10,10 @@ browser's built-in DecompressionStream. No network, no libraries.
 
 Layers shown in the page:
   labels      = dev ground truth (train_episodes.json, hours 0-48 only)
-  detections  = your submission.json (evaluation window, plus anything else in the file)
+  detections  = your submission.json (evaluation window, plus anything else in the file), plus our detections on the
+                labelled dev days (ids DV1..), produced by the same pipeline
+  Dev check   = a view that scores those dev detections against the labels with the organizers' scorer and lists, per label,
+                whether it was matched, the onset error and the overlap numbers
 """
 import argparse
 import base64
@@ -26,11 +29,16 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from make_viz import baselines, font_faces  # deck fonts as base64; per-tractor quiet baselines for the residual views
-from straightrows import locate
+import run_all                                   # the same pipeline that writes submission.json, run on the dev window here
+from straightrows import locate, output
 from straightrows.features import add_lockstep_offset
 from straightrows.load import load_labels, load_sda, load_telemetry
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scoring"))
+from score_submission import score  # the organizers' scorer, unchanged
+
 T0 = pd.Timestamp("2026-05-04T00:00:00Z")
+DEV_END = T0 + pd.Timedelta(hours=48)
 N = 72 * 3600
 MISSING = -32768  # int16 sentinel for "no sample at this second"
 
@@ -93,7 +101,7 @@ def secs(ts):
     return float((pd.Timestamp(ts) - T0).total_seconds())
 
 
-def events_from(labels_df, detections_path):
+def events_from(labels_df, detections_path, dev_rows=()):
     ev = []
     for _, r in labels_df.sort_values("start").iterrows():
         ev.append(dict(id=r.id, src="label", t0=secs(r.start), t1=secs(r.end), tractors=list(r.tractors),
@@ -103,7 +111,33 @@ def events_from(labels_df, detections_path):
         for i, d in enumerate(sub["detections"], 1):
             ev.append(dict(id=f"D{i}", src="detection", t0=secs(d["start"]), t1=secs(d["end"]), tractors=d["tractors"],
                            cls=d["class"], action=d["action"], conf=d.get("confidence"), evidence=d.get("evidence", [])))
+    for i, d in enumerate(dev_rows, 1):   # our detections on the labelled dev days, ids DV1.. (the submission only covers 05-06)
+        ev.append(dict(id=f"DV{i}", src="detection", t0=secs(d["start"]), t1=secs(d["end"]), tractors=d["tractors"],
+                       cls=d["class"], action=d["action"], conf=d.get("confidence"), evidence=d.get("evidence", [])))
     return ev
+
+
+def dev_detections(data):
+    """Run the real pipeline on hours 0-48 (features still use the whole dataset) and return submission-style rows."""
+    return [output._to_dict(d) for d in run_all.run(data, (T0, DEV_END))]
+
+
+def compare_with_labels(rows, key, events):
+    """Score the dev detections against the dev labels with the organizers' scorer; keep what the page shows.
+
+    The scorer says which detection matched each label only by its start/end/class, so map that back to our DV ids."""
+    res = score({"detections": rows}, key)
+    ids = {(e["t0"], e["t1"], e["cls"], tuple(e["tractors"])): e["id"] for e in events if e["id"].startswith("DV")}
+    episodes = []
+    for r in res["episodes"]:
+        det = ids.get((secs(r["start"]), secs(r["end"]), r["predicted_class"], tuple(r["tractors"]))) if r["matched"] else None
+        episodes.append(dict(id=r["episode"], truth=r["truth_class"], pred=r.get("predicted_class"), matched=r["matched"],
+                             correct=r["correct"], onset_s=r.get("onset_error_s"), time_iou=r.get("time_iou"),
+                             tractor_iou=r.get("tractor_iou"), action_ok=r["action_agreement"], det=det))
+    fps = [dict(det=ids.get((secs(d["start"]), secs(d["end"]), d["class"], tuple(d["tractors"]))), cls=d["class"]) for d in res["false_positives"]]
+    return dict(score=round(res["diagnostic_score"], 2), max=res["maximum"], macro_f1=round(res["macro_f1"], 3),
+                timing=round(res["mean_timing_credit"], 3), n=res["episode_count"], correct=sum(r["correct"] for r in res["episodes"]),
+                action=res["action_agreement"], benign_multipath=res["benign_multipath_reports"], fps=fps, episodes=episodes)
 
 
 def add_jammer_fits(events, tele, lat0, lon0):
@@ -147,7 +181,10 @@ def main():
     lat0, lon0 = float(tele.lat.mean()), float(tele.lon.mean())
     tele["x_m"] = (tele.lon - lon0) * 111320 * math.cos(math.radians(lat0))
     tele["y_m"] = (tele.lat - lat0) * 110574
-    events = events_from(load_labels(a.data), a.detections)
+    dev_rows = dev_detections(a.data)
+    events = events_from(load_labels(a.data), a.detections, dev_rows)
+    key = json.loads((Path(a.data) / "labels" / "train_episodes.json").read_text())
+    compare = compare_with_labels(dev_rows, key, events)
     add_jammer_fits(events, tele, lat0, lon0)
     tractors, blob, raw_bytes = pack_telemetry(tele)
     fix_names = {int(k): v for k, v in tele.drop_duplicates("fix_rank").set_index("fix_rank").fix_state.items()}
@@ -156,7 +193,7 @@ def main():
         missing=MISSING, fix_names=fix_names,
         baseline={t: {k: v[0] for k, v in d.items()} for t, d in b.items()},
         sigma={t: {k: v[1] for k, v in d.items()} for t, d in b.items()}, dev_end=48 * 3600.0, sda=sda_bundle(load_sda(a.data)),
-        events=events, origin=[lat0, lon0], lanes=desired_tracks(tele),
+        events=events, compare=compare, origin=[lat0, lon0], lanes=desired_tracks(tele),
     )
     tmpl = Path(__file__).resolve().parent.parent / "viz" / "explorer_template.html"
     html = tmpl.read_text()

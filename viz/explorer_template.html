@@ -83,15 +83,10 @@
   .tab .n{font-family:var(--data);font-size:12.5px;color:var(--muted);font-weight:400}
   .srcrow{display:flex;align-items:center;gap:10px;padding-bottom:12px}
   /* Dev check: our dev detections scored against the labels */
-  .cmphead{padding:12px 20px;border-bottom:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink);font-size:14px;line-height:1.5}
-  .cmphead b{font:600 21px var(--serif)}
-  .cmpnote{margin:0;padding:8px 20px;color:var(--muted);font-size:13px;line-height:1.4}
-  .cmpsec{padding:12px 20px 4px;font:600 12px var(--data);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;border-top:1px solid var(--rule-2)}
   .st{font:600 11.5px var(--data);padding:0 6px;border:1px solid currentColor;border-radius:3px;white-space:nowrap}
   .st.ok{color:var(--t3t)} .st.bad{color:var(--bad)}
   .jmp{border:0;background:none;padding:0;font:inherit;color:var(--leg);text-decoration:underline;cursor:pointer}
   .cmpcard{margin:10px 0 14px;padding-top:8px;border-top:1px solid var(--rule-2)} .cmpcard p{margin:4px 0 0;line-height:1.5}
-  body.cmpview #tabs,body.cmpview #sort{display:none}
   #evlist{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;border-top:1px solid var(--ink)}
   .ev{--c:var(--muted);display:grid;grid-template-columns:14px 1fr auto;grid-template-areas:"mk cl id" ". l2 l2";gap:2px 10px;align-items:baseline;width:100%;padding:9px 20px;border:0;border-top:1px solid var(--rule-2);background:none;color:var(--ink);text-align:left;cursor:pointer;transition:background .15s;flex:none}
   .ev:first-child{border-top:0}
@@ -160,6 +155,7 @@
   /* focus bar */
   #focusbar{display:none} body.focus #focusbar{display:block} body.focus #nav,body.focus #ovp{display:none}
   .fb1,.fb2,.fb3{display:flex;gap:10px 14px;align-items:center;flex-wrap:wrap}
+  #nav>.fb2{margin:0 0 12px;padding:0;border:0}
   .fb2,.fb3{margin-top:10px;padding-top:10px;border-top:1px solid var(--rule-2)}
   .fbt{display:flex;align-items:center;gap:10px;min-width:0}
   .fbt .nm{font:500 22px/1.15 var(--serif);color:var(--ink)}
@@ -204,13 +200,11 @@
   #card{display:none;overflow:hidden;flex-direction:column;gap:12px;flex:1;min-height:0}
   #card>*{flex-shrink:0}
   #card>.evid{flex:1 1 auto;min-height:140px;overflow-y:auto;padding-right:4px}
-  #readout{overflow-y:auto;flex:1;min-height:0;padding-bottom:16px}
+  #readout{overflow-y:auto;flex:1;min-height:0;padding-bottom:16px;padding-right:14px;scrollbar-gutter:stable}   /* keep the right-aligned T3 column clear of an overlay scrollbar */
   body.focus #cardp[data-tab=detection] #card{display:flex} body.focus #cardp[data-tab=detection] #readout{display:none}
   .rh{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;white-space:nowrap}
   .rh h2{font-size:17px}
   .rh .t{font:12.5px var(--data);color:var(--muted);margin-left:auto}
-  .rh .pin{font-size:12.5px;font-weight:700;border:1px solid var(--ink);border-radius:2px;padding:0 7px;background:none;cursor:pointer;color:var(--ink)}
-  .rh .pin:hover{background:var(--ink);color:var(--paper)}
   table.vals{width:100%;border-collapse:collapse;font-size:13.5px}
   table.vals th{font:600 12.5px var(--data);text-align:right;padding:2px 0 6px}
   table.vals td{padding:5px 0 5px 8px;border-top:1px solid var(--rule-2);font:13px var(--data);text-align:right;white-space:nowrap;color:var(--ink)}
@@ -276,11 +270,9 @@
 <main>
   <aside class="side" aria-label="Detections">
     <div class="sidetop">
-      <div class="phead"><h2>Detections</h2>
-        <select id="sort" aria-label="Sort detections"><option value="time">By time</option><option value="class">By class</option><option value="conf">By confidence</option></select></div>
+      <div class="phead"><h2>Detections</h2></div>
       <div class="tabs" id="tabs" role="group" aria-label="Filter by class"></div>
-      <div class="srcrow"><span class="lbl">Show</span><div class="seg" id="layers" role="group" aria-label="Event source"><button data-l="both" class="on">Both</button><button data-l="labels">Labels</button><button data-l="detections">Detected</button><button data-l="off">Off</button></div></div>
-      <div class="srcrow" id="viewrow"><span class="lbl">View</span><div class="seg" id="viewseg" role="group" aria-label="List view"><button data-v="events" class="on">Events</button><button data-v="compare" title="Our detections on the dev days, scored against the labels">Dev check</button></div></div>
+      <div class="srcrow"><span class="lbl">Show</span><div class="seg" id="layers" role="group" aria-label="Event source"><button data-l="both">Both</button><button data-l="labels">Labels</button><button data-l="detections" class="on">Detected</button></div></div>
     </div>
     <div id="evlist"></div>
   </aside>
@@ -294,27 +286,23 @@
         <div class="fbt" id="fbtitle"></div><span style="flex:1"></span>
         <button class="btn" id="fbExit" title="Back to all data (Esc)">Exit focus</button>
       </div>
-      <div class="fb2">
-        <button class="play" id="play" title="Play / pause (Space)"></button>
-        <input id="seek" type="range" min="0" max="1000" value="0" aria-label="Playback position" title="Drag a chart to scrub too. Left / Right keys: 30 s">
-        <span id="fclock"></span>
-        <select id="speed" aria-label="Playback speed"><option value="10">10×</option><option value="30" selected>30×</option><option value="60">60×</option><option value="120">120×</option><option value="300">300×</option></select>
-      </div>
       <div class="fb3" id="fbtools"></div>
     </div>
 
     <div id="nav">
+      <div class="fb2" id="fbplay">
+        <button class="play" id="play" title="Play / pause (Space)"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>Play</button>
+        <input id="seek" type="range" min="0" max="1000" value="0" aria-label="Playback position" title="Drag to scrub through the time range on screen">
+        <span id="fclock"></span>
+        <select id="speed" aria-label="Playback speed"><option value="10">10×</option><option value="30">30×</option><option value="60">60×</option><option value="120">120×</option><option value="300">300×</option><option value="900" selected>900×</option><option value="3600">3600×</option></select>
+      </div>
       <div id="navrowA">
-        <div class="grp"><span class="lbl">Zoom</span>
-          <div class="seg" id="zooms" role="group" aria-label="Zoom level" title="Keys: + and − zoom, 0 shows all 72 h"><button class="mono" data-z="259200">72 h</button><button class="mono" data-z="86400">24 h</button><button class="mono" data-z="21600">6 h</button><button class="mono" data-z="3600">1 h</button><button class="mono" data-z="1200">20 m</button><button class="mono" data-z="120">2 m</button></div></div>
-        <div class="seg" id="steps" role="group" aria-label="Step the view" title="Keys: Left and Right arrows pan"><button class="mono" data-s="-21600">−6 h</button><button class="mono" data-s="-3600">−1 h</button><button class="mono" data-s="-60">−1 m</button><button class="mono" data-s="60">+1 m</button><button class="mono" data-s="3600">+1 h</button><button class="mono" data-s="21600">+6 h</button></div>
         <span style="flex:1"></span>
-        <div class="seg" role="group" aria-label="Jump between events"><button id="prevEv" title="Previous event ([)">‹ Event</button><button id="nextEv" title="Next event (])">Event ›</button></div>
         <button class="btn pri" id="focusBtn" disabled title="Replay the selected event: field map, playback, evidence">Focus</button>
       </div>
       <div id="navrow2"><div id="navtools"><div id="tools">
           <div id="tfilt" role="group" aria-label="Show tractors" title="Show or hide each tractor in the field map, rows and charts"><span class="lbl">Show</span></div>
-          <div class="vals-grp"><span class="lbl">Values</span><div class="seg" data-modeseg role="group" aria-label="Chart values"><button data-m="raw" class="on" title="Signals as measured (R cycles in focus mode)">Raw</button><button data-m="own" title="Signal minus that tractor's quiet median">vs own</button><button data-m="fleet" title="Signal minus the fleet median at the same second">vs fleet</button></div></div>
+          <div class="vals-grp"><span class="lbl">Values</span><div class="seg" data-modeseg role="group" aria-label="Chart values"><button data-m="raw" class="on" title="The signals exactly as measured (R cycles the three views in focus mode)">Measured</button><button data-m="own" title="Each tractor minus its own normal level, so 0 means business as usual for that tractor">vs normal</button><button data-m="fleet" title="Each tractor minus the median of all three at the same second, so a lone outlier stands out and shared events cancel">vs others</button></div></div>
           <button class="btn" id="allSig" title="Each class opens with the signals that prove it"></button>
           <details class="menu" id="sigmenu"><summary class="btn">Signals</summary><div class="menupanel" id="menuBody"></div></details>
         </div></div>
@@ -402,10 +390,10 @@ const SIG = {
 const ORDER = ["cn0","mincn0","xte","londev","sats","fix","link","speed"];
 const RES = {cn0:"mean_cn0_dbhz", xte:"axte", sats:"num_sats"};   // signals that have own / fleet residual views (key into bundle baseline & sigma)
 const S = {
-  filter:"ALL", sort:"time", v0:0, v1:N, tr:Object.fromEntries(TRS.map(t=>[t,true])),
+  filter:"ALL", v0:0, v1:N, tr:Object.fromEntries(TRS.map(t=>[t,true])),
   sig:{cn0:true,mincn0:false,xte:true,londev:false,sats:true,fix:true,link:false,speed:false}, mode:"raw",
   sda:{kp:true,dst:true,s4:true,ev:true},
-  layers:"both", cls:Object.fromEntries(CLASSES.map(c=>[c,true])),
+  layers:"detections", cls:Object.fromEntries(CLASSES.map(c=>[c,true])),
   fixedY:false, parked:true, ovSig:"cn0", pin:null, cur:null, sel:null,
 };
 
@@ -610,7 +598,7 @@ function drawChart(c){
     if(raw) grow(...rawRange(a,k,S.v0,S.v1)); else { const q=colStats(a,k,S.v0,S.v1,PW); if(store) store[t]=q; for(let x=0;x<PW;x++){ if(q.mn[x]<lo)lo=q.mn[x]; if(q.mx[x]>hi)hi=q.mx[x]; } } };
   for(const t of trs){ scan(c.key,st,t,true); if(def.overlay) scan(def.overlay,ost,t,false); }
   if(!isFinite(lo)){ lo=0; hi=1; }
-  c.rng.textContent=rm?(rm==="own"?"vs own baseline":"vs fleet median"):"";   // no min-max readout: what the values mean is the only thing worth saying
+  c.rng.textContent=rm?(rm==="own"?"vs its normal level":"vs the other tractors (median)"):"";   // no min-max readout: what the values mean is the only thing worth saying
   let sigma=0; if(rm) sigma=3*Math.max(...TRS.map(t=>B.sigma[t][RES[c.key]]));
   let d0,d1;
   if(rm){ lo=Math.min(lo,-sigma); hi=Math.max(hi,sigma); const p=(hi-lo)*.08||1; d0=lo-p; d1=hi+p; }
@@ -742,15 +730,13 @@ function drawOv(){
 /* ---------- master render ---------- */
 function render(){
   if(!D[TRS[0]]) return;
-  drawHead(); layoutCharts(); for(const c of charts) drawChart(c); for(const c of sdaCv) drawSda(c); if(!ovBase) buildOv(); else drawOv(); updateNav(); updateReadout(); renderList(); updateField(); if(F) updateSeek(); writeHash(); placeCursor();
+  drawHead(); layoutCharts(); for(const c of charts) drawChart(c); for(const c of sdaCv) drawSda(c); if(!ovBase) buildOv(); else drawOv(); updateNav(); updateReadout(); renderList(); updateField(); updateSeek(); writeHash(); placeCursor();
 }
 function updateNav(){
   const span=S.v1-S.v0, PW=plotW($("headcv").getBoundingClientRect().width), spp=span/PW;
   $("rangeA").textContent=fmtT(S.v0,span<7200)+" → "+fmtT(S.v1,span<7200).slice(span>=86400||fmtT(S.v0).slice(0,10)!==fmtT(S.v1).slice(0,10)?0:11)+" UTC";
   $("rangeB").textContent=fmtDur(span)+" · "+(spp<=1.25?"1 Hz samples":"1 px ≈ "+fmtDur(spp)+", min–max band");
-  for(const b of $("zooms").children) b.classList.toggle("on",Math.abs(+b.dataset.z-span)/span<.02);
   $("focusBtn").disabled=!S.sel;
-  const evs=evSorted(), c=center(); $("prevEv").disabled=!evs.some(e=>e.t0<c-1); $("nextEv").disabled=!evs.some(e=>e.t0>c+1);
 }
 
 /* ---------- cursor, crosshair, readout ---------- */
@@ -767,7 +753,7 @@ const ROWS=[["cn0","Mean C/N0",v=>v.toFixed(1)],["mincn0","Weakest sat",v=>v.toF
 let cells={}, evKey="", openEv=new Set();
 function buildReadout(){
   const r=$("readout"); r.textContent="";
-  const head=el("div",{class:"rh"}, el("h2",{},"At cursor"), el("span",{class:"t",id:"rt"}), el("button",{class:"pin",id:"rpin",title:"Unpin (Esc)",style:"display:none",onclick:()=>{S.pin=null;schedule();}},"Unpin"));
+  const head=el("div",{class:"rh"}, el("h2",{},"At cursor"), el("span",{class:"t",id:"rt"}));
   const tbl=el("table",{class:"vals"}), thead=el("tr",{},el("th",{},"")); for(const t of TRS) thead.append(el("th",{style:"color:"+TTXT[t]},t)); tbl.append(el("thead",{},thead));
   const tb=el("tbody"); cells={};
   for(const [k,lab] of ROWS){ const tr=el("tr",{},el("td",{},lab)); cells[k]={}; for(const t of TRS){ const td=el("td",{}); cells[k][t]=td; tr.append(td); } tb.append(tr); }
@@ -797,13 +783,13 @@ function evCard(e){
   return c;
 }
 function updateReadout(){
-  const t=S.pin!=null?S.pin:S.cur; const rt=$("rt"), pin=$("rpin");
-  if(t==null){ rt.textContent=""; pin.style.display="none";
+  const t=S.pin!=null?S.pin:S.cur; const rt=$("rt");
+  if(t==null){ rt.textContent="";
     for(const k in cells) for(const tr of TRS){ cells[k][tr].textContent="–"; cells[k][tr].className=S.tr[tr]?"":"off"; }
     const box=$("rsda"); if(box.dataset.k!=="none"){ box.dataset.k="none"; box.textContent=""; box.append(el("h3",{},"Space weather"),el("p",{class:"sda-note"},"Move over a chart to read every signal at that second. Click to pin the cursor and keep it while you pan.")); }
     const rev=$("rev"); if(evKey!=="none"){ evKey="none"; rev.textContent=""; rev.style.display="none"; } return; }
   $("rev").style.display="";
-  rt.textContent=fmtT(t,true)+"Z"; pin.style.display=S.pin!=null?"":"none";
+  rt.textContent=fmtT(t,true)+"Z";
   const i=clamp(Math.floor(t),0,N-1);
   for(const [k,,f] of ROWS) for(const tr of TRS){ const {a,k:kk}=D[tr][k], v=a[i], td=cells[k][tr]; td.className=S.tr[tr]?"":"off";
     if(v===MISS){ td.textContent="no data"; continue; } const val=v*kk; td.textContent=f(val);
@@ -836,14 +822,26 @@ function applyKey(){
 }
 function setMode(m){ S.mode=m; for(const seg of document.querySelectorAll("[data-modeseg]")) for(const b of seg.children) b.classList.toggle("on",b.dataset.m===m); schedule(); }
 function setTab(t){ $("cardp").dataset.tab=t; for(const b of $("rtabs").firstElementChild.children) b.classList.toggle("on",b.dataset.tab===t); }
-function setPlaying(on){ if(!F) return; F.playing=on; $("play").innerHTML=on?PAUSE:(F.t>=F.w1-1?AGAIN:PLAY);
-  if(on&&!pbRaf){ pbLast=0; pbRaf=requestAnimationFrame(pbLoop); } }
-function pbLoop(ts){ pbRaf=0; if(!F||!F.playing) return; const dt=pbLast?Math.min(.1,(ts-pbLast)/1000):0; pbLast=ts;
-  F.t+=dt*F.speed; if(F.t>=F.w1){ F.t=F.w1; setPlaying(false); } tickFocus(); if(F.playing) pbRaf=requestAnimationFrame(pbLoop); }
+// Playback works on one "window": the focus window F in focus mode, otherwise G, which is whatever time range is on screen.
+// While G is paused, S.pin (the pinned cursor) is its playhead; while it plays, G.t drives S.pin.
+const G={t:0,w0:0,w1:N,speed:900,playing:false}, spd={free:"900",focus:"30"};
+function PB(){ if(F) return F; G.w0=S.v0; G.w1=S.v1; if(!G.playing&&S.pin!=null) G.t=S.pin; G.t=clamp(G.t,G.w0,G.w1); return G; }
+function setPlaying(on){ const P=PB();
+  if(P===G&&on&&(S.pin==null||P.t>=P.w1-1)){ P.t=P.w0; S.pin=P.t; }   // start, or replay from the left edge of the view
+  P.playing=on; P.speed=+$("speed").value; if(P===G&&on) S.cur=null;
+  $("play").innerHTML=on?PAUSE:(P.t>=P.w1-1?AGAIN:PLAY);
+  if(on&&!pbRaf){ pbLast=0; pbRaf=requestAnimationFrame(pbLoop); }
+  if(on&&P===G) tickFocus(); }
+function pbLoop(ts){ pbRaf=0; const P=PB(); if(!P.playing) return;
+  if(P===G&&S.pin==null){ setPlaying(false); return; }            // the cursor was cleared (Esc): stop
+  const dt=pbLast?Math.min(.1,(ts-pbLast)/1000):0; pbLast=ts;
+  P.t+=dt*P.speed; const end=P.t>=P.w1; if(end) P.t=P.w1;
+  tickFocus(); if(end) setPlaying(false); else pbRaf=requestAnimationFrame(pbLoop); }
 function tickFocus(){   // cheap per-frame update: the charts are not redrawn, only the playhead, readout and field
-  if(!F) return; S.pin=F.t; placeCursor(); updateReadout(); updateField(); updateSeek(); }
-function updateSeek(){ const f=(F.t-F.w0)/(F.w1-F.w0), sk=$("seek"); sk.value=Math.round(f*1000); sk.style.setProperty("--p",(f*100)+"%"); $("fclock").textContent=fmtT(F.t,true).slice(11)+"Z"; }
-function enterFocus(e){ FZ.z=1; FZ.px=0; FZ.py=0;
+  const P=PB(); S.pin=P.t; placeCursor(); updateReadout(); updateField(); updateSeek(); }
+function updateSeek(){ const P=PB(), idle=P===G&&S.pin==null&&!G.playing, f=idle?0:(P.t-P.w0)/(P.w1-P.w0), sk=$("seek");
+  sk.value=Math.round(f*1000); sk.style.setProperty("--p",(f*100)+"%"); $("fclock").textContent=idle?"":(P===F?fmtT(P.t,true).slice(11):fmtT(P.t,true).slice(5))+"Z"; }
+function enterFocus(e){ if(G.playing) setPlaying(false); $("speed").value=spd.focus; $("focusbar").insertBefore($("fbplay"),$("fbtools")); FZ.z=1; FZ.px=0; FZ.py=0;
   if(!F){ F={saved:{sig:{...S.sig},sda:{...S.sda}}}; document.body.classList.add("focus"); }
   $("sigmenu").open=false;
   const pad=1200; Object.assign(F,{ev:e,w0:Math.max(0,e.t0-pad),w1:Math.min(N,e.t1+pad),speed:+$("speed").value,all:false});
@@ -853,6 +851,7 @@ function enterFocus(e){ FZ.z=1; FZ.px=0; FZ.py=0;
 }
 function exitFocus(){
   if(!F) return; FZ.z=1; FZ.px=0; FZ.py=0; setPlaying(false); Object.assign(S.sig,F.saved.sig); Object.assign(S.sda,F.saved.sda); F=null; S.pin=null; S.cur=null; evKey="";
+  $("nav").prepend($("fbplay")); $("speed").value=spd.free; G.playing=false; $("play").innerHTML=PLAY; updateSeek();
   document.body.classList.remove("focus"); $("navtools").append($("tools")); fb=fbAll; syncControls(); ovBase=null; buildStack(); try{ history.replaceState(null,"","#v="+Math.round(S.v0)+","+Math.round(S.v1)); }catch(err){}
 }
 let fb=null, fbAll=null;
@@ -1019,22 +1018,6 @@ function cmpHtml(e){
     h=r?pill(r.correct?"Matches label":"Wrong class",r.correct)+" "+jump(r.id)+" ("+CNAME[r.truth]+")":f?pill("False positive",false)+" no label matches this detection":'<span class="muted">No label for this one (the scorer allows extra short multipath reports).</span>'; }
   return h?'<div class="cmpcard"><span class="lbl">Against the dev labels</span><p>'+h+"</p></div>":"";
 }
-function renderCompare(box){
-  const c=B.compare, esc=x=>String(x).replace(/&/g,"&amp;").replace(/</g,"&lt;"); box.textContent="";
-  box.append(el("div",{class:"cmphead",html:"<b>"+c.score.toFixed(2)+" / "+c.max+"</b> dev diagnostic<br>"+c.correct+"/"+c.n+" classes right · "+c.action+"/"+c.n+" actions right · "+c.fps.length+" false positives · "+c.benign_multipath+" extra multipath reports allowed"}),
-    el("p",{class:"cmpnote"},"In-sample: the rules were read from these 12 episodes, so this shows they fit, not how they generalise. Click a label to replay it with our match."));
-  box.append(el("div",{class:"cmpsec"},"Labels (dev, hours 0-48)"));
-  for(const r of c.episodes){ const lab=EV.find(e=>e.id===r.id), st=!r.matched?"Missed":r.correct?"Match":"Wrong class";
-    box.append(el("button",{class:"ev",onclick:()=>lab&&enterFocus(lab)},el("i",{class:"k mk "+r.truth}),el("span",{class:"cl"},CNAME[r.truth]),el("span",{class:"id"},r.id),
-      el("span",{class:"l2"},el("span",{class:"st "+(r.correct?"ok":"bad")},st),
-        el("span",{class:"tm"},r.matched?(r.onset_s>=0?"+":"")+(r.onset_s/60).toFixed(1)+" min · IoU "+r.time_iou.toFixed(2):"no detection")))); }
-  box.append(el("div",{class:"cmpsec"},"False positives ("+c.fps.length+")"));
-  if(!c.fps.length) box.append(el("div",{class:"empty"},"None on the dev days."));
-  for(const f of c.fps){ const d=EV.find(e=>e.id===f.det); if(!d) continue;
-    box.append(el("button",{class:"ev",onclick:()=>enterFocus(d)},el("i",{class:"k mk "+d.cls}),el("span",{class:"cl"},CNAME[d.cls]),el("span",{class:"id"},d.id),
-      el("span",{class:"l2"},el("span",{class:"st bad"},"False positive"),el("span",{class:"tm"},fmtT(d.t0,false).slice(5)+"Z")))); }
-}
-
 /* ---------- pointer interaction on the stack ---------- */
 (function stackPointer(){
   const st=$("stack"), inner=$("inner"); let drag=null;
@@ -1052,6 +1035,7 @@ function renderCompare(box){
       if(box){ const tol=(S.v1-S.v0)/head.PW*3, rowOf=(laneLayout().lanes.find(l=>l.ln===box.ln)||{}).rowOf||{},
           cand=EV.filter(x=>x.src===box.ln&&evVisible(x)&&(box.row==="tick"?isTick(x):!isTick(x)&&(rowOf[x.id]||0)===box.row)&&x.t0-tol<=t&&t<=x.t1+tol).sort((a,b)=>(a.t1-a.t0)-(b.t1-b.t0))[0];
         if(cand){ S.sel=cand.id; S.pin=t; schedule(); return; } } }
+    if(G.playing){ G.t=t; S.pin=t; S.cur=t; schedule(); return; }   // while playing, a click seeks
     S.pin=S.pin==null?t:null; S.cur=t; schedule(); };
   st.addEventListener("pointerup",up); st.addEventListener("pointercancel",()=>{ drag=null; });
   st.addEventListener("wheel",e=>{ const t=timeAt(e); if(Math.abs(e.deltaX)>Math.abs(e.deltaY)||e.shiftKey){ e.preventDefault(); setView(S.v0+(e.deltaX||e.deltaY)*(S.v1-S.v0)/2000,S.v1+(e.deltaX||e.deltaY)*(S.v1-S.v0)/2000); return; }
@@ -1069,13 +1053,9 @@ function buildControls(){
   mb.append(grp("Space weather",[["kp","Kp index"],["dst","Dst"],["s4","S4 scintillation"],["ev","RFI and advisories"]].map(([k,lab])=>{ const [i,l]=chk(lab,S.sda[k],v=>{S.sda[k]=v; buildStack();}); INP.sda[k]=i; return l; })));
   mb.append(grp("View",[chk("Fixed y-range (whole dataset)",S.fixedY,v=>{S.fixedY=v; schedule();})[1], chk("Shade parked time",S.parked,v=>{S.parked=v; schedule();})[1]]));
   // detections panel: sort, class tabs, source
-  $("sort").onchange=e=>{ S.sort=e.target.value; renderList(); };
   for(const b of $("layers").children) b.onclick=()=>{ S.layers=b.dataset.l; for(const x of $("layers").children) x.classList.toggle("on",x===b); ovBase=null; renderTabs(); schedule(); };
   renderTabs();
   $("ovSig").onchange=e=>{S.ovSig=e.target.value; ovBase=null; schedule();};
-  for(const b of $("steps").children) b.onclick=()=>{ const s=+b.dataset.s; setView(S.v0+s,S.v1+s); };
-  for(const b of $("zooms").children) b.onclick=()=>{ const sp=+b.dataset.z, c=S.pin!=null&&S.pin>=S.v0&&S.pin<=S.v1?S.pin:center(); setView(c-sp/2,c+sp/2); };
-  $("prevEv").onclick=()=>stepEvent(-1); $("nextEv").onclick=()=>stepEvent(1);
   const fc=$("field"), at=e=>{ const r=fc.getBoundingClientRect(); return [e.clientX-r.left,e.clientY-r.top]; };
   fc.addEventListener("wheel",e=>{ e.preventDefault(); const [mx,my]=at(e); fieldZoom(Math.exp(-e.deltaY*(e.deltaMode?0.05:0.0015)),mx,my); },{passive:false});
   let fdrag=null;
@@ -1091,11 +1071,12 @@ function buildControls(){
   ff.onclick=()=>{ if(fsOn()) document.exitFullscreen(); else fw.requestFullscreen().catch(()=>{}); };
   document.addEventListener("fullscreenchange",()=>{ fsIcon(); setTimeout(updateField,30); });
   $("fzin").onclick=()=>fieldZoom(1.6); $("fzout").onclick=()=>fieldZoom(1/1.6); $("fzfit").onclick=fieldFit;
+  $("play").innerHTML=PLAY; $("speed").value=spd.free;
   $("focusBtn").onclick=()=>{ const e=EV.find(x=>x.id===S.sel); if(e) enterFocus(e); };
   $("fbPrev").onclick=()=>stepEvent(-1); $("fbNext").onclick=()=>stepEvent(1); $("fbExit").onclick=exitFocus;
-  $("play").onclick=()=>{ if(!F) return; if(F.t>=F.w1-1) F.t=F.w0; setPlaying(!F.playing); };
-  $("seek").oninput=e=>{ if(!F) return; setPlaying(false); F.t=F.w0+(+e.target.value/1000)*(F.w1-F.w0); tickFocus(); };
-  $("speed").onchange=e=>{ if(F) F.speed=+e.target.value; };
+  $("play").onclick=()=>{ const P=PB(); if(P===F&&F.t>=F.w1-1) F.t=F.w0; setPlaying(!P.playing); };
+  $("seek").oninput=e=>{ const P=PB(); setPlaying(false); P.t=P.w0+(+e.target.value/1000)*(P.w1-P.w0); S.pin=P.t; tickFocus(); };
+  $("speed").onchange=e=>{ PB().speed=+e.target.value; spd[F?"focus":"free"]=e.target.value; };
   $("allSig").onclick=()=>{ if(!F) return; F.all=!F.all; applyKey(); };
   for(const seg of document.querySelectorAll("[data-modeseg]")) for(const b of seg.children) b.onclick=()=>setMode(b.dataset.m);
   for(const b of $("rtabs").firstElementChild.children) b.onclick=()=>setTab(b.dataset.tab);
@@ -1133,9 +1114,8 @@ function renderTabs(){
 let listKey="";
 function renderList(){
   const box=$("evlist"); if(!box) return;
-  const key=[S.sel,S.filter,S.sort,S.layers,mpOpen,F?1:0,S.view].join("|"); if(key===listKey&&box.dataset.k!=="") return; listKey=key; box.dataset.k="x";
-  if(S.view==="compare"&&B.compare) return renderCompare(box);
-  const cmp={time:(a,b)=>a.t0-b.t0, class:(a,b)=>CLASSES.indexOf(a.cls)-CLASSES.indexOf(b.cls)||a.t0-b.t0, conf:(a,b)=>(b.conf??-1)-(a.conf??-1)||a.t0-b.t0}[S.sort];
+  const key=[S.sel,S.filter,S.layers,mpOpen,F?1:0].join("|"); if(key===listKey&&box.dataset.k!=="") return; listKey=key; box.dataset.k="x";
+  const cmp=(a,b)=>a.t0-b.t0;   // always by start time
   const items=EV.filter(e=>srcOk(e)&&S.cls[e.cls]), main=items.filter(e=>e.cls!=="MULTIPATH").sort(cmp), mp=items.filter(e=>e.cls==="MULTIPATH").sort(cmp);
   const row=(e,cl)=>el("button",{class:"ev "+(cl||"")+(S.sel===e.id?" on":""),onclick:()=>enterFocus(e)},
       el("i",{class:"k mk "+e.cls}),el("span",{class:"cl"},CNAME[e.cls]),el("span",{class:"id"},e.id),
@@ -1148,7 +1128,7 @@ function renderList(){
     const g=el("button",{class:"ev grp","aria-expanded":String(mpOpen),onclick:()=>{ mpOpen=!mpOpen; renderList(); }},el("i",{class:"k mk MULTIPATH"}),el("span",{class:"cl"},"Multipath"),el("span",{class:"id",html:mp.length+chev}),
       el("span",{class:"note"},nl+" labelled, "+nd+" detected: one per tractor per headland pass. "+(mpOpen?"Collapse":"Expand")+" to list them."));
     box.append(g); if(mpOpen) for(const e of mp) box.append(row(e,"sub")); }
-  if(!box.children.length) box.append(el("div",{class:"empty"},S.layers==="off"?"Event layers are off. Choose Both, Labels or Detected above.":"No events match."));
+  if(!box.children.length) box.append(el("div",{class:"empty"},"No events match."));
   box.scrollTop=prev; const on=box.querySelector(".ev.on"); if(on) on.scrollIntoView({block:"nearest"});
 }
 
@@ -1164,19 +1144,12 @@ addEventListener("keydown",e=>{
     if(used) e.preventDefault(); if(!(k==="+"||k==="="||k==="-"||k==="_")) return; used=true; }
   if(k==="ArrowLeft") setView(S.v0-span*(e.shiftKey?.8:.2),S.v1-span*(e.shiftKey?.8:.2)); else if(k==="ArrowRight") setView(S.v0+span*(e.shiftKey?.8:.2),S.v1+span*(e.shiftKey?.8:.2));
   else if(k==="+"||k==="=") zoomAbout(S.pin!=null?S.pin:center(),.5); else if(k==="-"||k==="_") zoomAbout(S.pin!=null?S.pin:center(),2);
-  else if(k==="0") setView(0,N); else if(k==="Escape"){ S.pin=null; S.sel=null; schedule(); } else if(k==="[") stepEvent(-1); else if(k==="]") stepEvent(1); else used=false;
+  else if(k==="0") setView(0,N); else if(k==="Escape"){ setPlaying(false); S.pin=null; S.sel=null; schedule(); } else if(k===" ") $("play").click(); else if(k==="[") stepEvent(-1); else if(k==="]") stepEvent(1); else used=false;
   if(used) e.preventDefault();
 });
 new ResizeObserver(()=>{ ovBase=null; schedule(); }).observe(document.body);
 addEventListener("hashchange",()=>{ readHash(); schedule(); });
 
-(function viewToggle(){
-  const seg=$("viewseg"); if(!B.compare){ $("viewrow").style.display="none"; return; }
-  seg.querySelectorAll("button").forEach(b=>b.onclick=()=>{
-    S.view=b.dataset.v; seg.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b)); document.body.classList.toggle("cmpview",S.view==="compare");
-    if(S.view==="compare") $("layers").querySelector('[data-l="both"]').click();   // lanes show labels and detections together
-    listKey=""; renderList(); schedule(); });
-})();
 /* ---------- start ---------- */
 (async function init(){
   try{ if(typeof DecompressionStream==="undefined") throw new Error("This browser has no DecompressionStream; use a current Chrome, Edge, Firefox or Safari.");
