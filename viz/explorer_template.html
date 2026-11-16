@@ -262,6 +262,51 @@
     main{display:flex;flex-direction:column} .grip{display:none} .charts{order:-1;border:0;padding:10px 14px 0} .mid{padding:14px;border-left:0}
     #stack{overflow-y:visible} #evlist{max-height:340px} #ovp #rangeB{display:none}
     .sidetop{padding:14px 14px 0} .ev{padding-left:14px;padding-right:14px}
+    #stage{min-height:0} .side{max-height:none}
+    /* phone: one view at a time, switched from a bottom tab bar */
+    body{padding-bottom:calc(56px + env(safe-area-inset-bottom))}
+    body[data-view=events] .charts,body[data-view=events] .mid,body[data-view=charts] .side,body[data-view=charts] .mid,body[data-view=field] .side,body[data-view=field] .charts{display:none}
+    #evlist{max-height:none;overflow:visible} .side{min-height:calc(100vh - 56px)}
+    .ev.sub{padding-left:24px}
+  }
+  #mobnav{display:none;position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--paper);border-top:1px solid var(--ink);padding-bottom:env(safe-area-inset-bottom)}
+  #mobnav button{flex:1;background:none;border:0;border-right:1px solid var(--rule);padding:0;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer}
+  #mobnav button:last-child{border-right:0} #mobnav button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6}
+  #mobnav button.on{color:var(--ink);box-shadow:inset 0 3px 0 var(--ink)}
+  /* touch: let the page scroll vertically over the charts and map; horizontal drags still pan the time axis */
+  #stack,#head{touch-action:pan-y} #field{touch-action:pan-y} #field.zoomed{touch-action:none}
+  @media (pointer:coarse){
+    .seg button{padding:9px 11px} .seg button.mono{padding:9px 8px}
+    .btn{padding:9px 14px} .btn.sm{padding:6px 12px;min-width:40px;min-height:36px}
+    select{padding:8px 8px;font-size:16px} #fzoom .btn{min-width:40px} #ffull{width:40px;height:36px}
+    .tab{padding:8px 0 8px} #tfilt label{padding:6px 0} .chk{padding:7px 0}
+    #seek{height:36px} button.play{padding:10px 16px}
+    #ov{touch-action:none}
+  }
+  #mobplay{display:none}
+  @media (max-width:820px){
+    #mobnav{display:flex}
+    /* playback bar docked above the tab bar so Play works from Charts and Field alike */
+    #mobplay{display:block;position:fixed;left:0;right:0;bottom:calc(56px + env(safe-area-inset-bottom));z-index:39;background:var(--paper);border-top:1px solid var(--rule-3);padding:6px 12px 8px}
+    body[data-view=events] #mobplay{display:none}
+    #mobplay .fb2{margin:0;padding:0;border:0;gap:4px 10px;flex-wrap:wrap}
+    #mobplay #seek{order:-1;flex:1 1 100%;height:24px} #mobplay button.play{flex:1;padding:8px 14px}
+    body[data-view=charts],body[data-view=field]{padding-bottom:calc(128px + env(safe-area-inset-bottom))}
+  }
+  @media (max-width:560px){
+    body{font-size:15px} h2{font-size:18px}
+    .charts{padding:8px 12px 0} .mid{padding:12px}
+    #navrow2{padding:8px 0 10px} #tools{gap:10px 14px} #tfilt{gap:12px;flex-wrap:wrap}
+    .menu{margin-left:0} .menupanel{position:fixed;left:12px;right:12px;top:auto;bottom:12px;width:auto;max-height:65vh}
+    .fb1{gap:8px} .fbt .nm{font-size:19px} .fb3 #tools{width:100%}
+    #fbplay{gap:8px 10px} #seek{min-width:0;flex:1 1 100%;order:5} button.play{min-width:0;flex:1}
+    #field{height:clamp(280px,48vh,420px)} body.focus #field{height:clamp(240px,40vh,360px)}
+    .ch canvas{height:120px} .ch.sda canvas{height:48px}
+    .ch-head{gap:8px} .ch-head .rng{display:none}
+    .ev .cl{font-size:16px} .ev .l2{flex-wrap:wrap;gap:2px 10px}
+    .cls{font-size:21px} .verdict b{font-size:15px}
+    #cardp{min-height:0} #card{overflow:visible} #card>.evid{overflow:visible;min-height:0} #readout{overflow:visible;padding-right:0}
+    #xtag{font-size:12px}
   }
   @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -339,6 +384,13 @@
     </div>
   </section>
 </main>
+
+<div id="mobplay"></div>
+<nav id="mobnav" aria-label="Views">
+  <button data-v="events"><svg viewBox="0 0 20 20"><path d="M3 5h14M3 10h14M3 15h14"/></svg>Events</button>
+  <button data-v="charts"><svg viewBox="0 0 20 20"><path d="M2 17V3M2 17h16M5 13l4-5 3 3 5-7"/></svg>Charts</button>
+  <button data-v="field"><svg viewBox="0 0 20 20"><rect x="2.5" y="4.5" width="15" height="11"/><path d="M2.5 10h15M10 4.5v11"/></svg>Field</button>
+</nav>
 
 <script>
 "use strict";
@@ -841,7 +893,16 @@ function tickFocus(){   // cheap per-frame update: the charts are not redrawn, o
   const P=PB(); S.pin=P.t; placeCursor(); updateReadout(); updateField(); updateSeek(); }
 function updateSeek(){ const P=PB(), idle=P===G&&S.pin==null&&!G.playing, f=idle?0:(P.t-P.w0)/(P.w1-P.w0), sk=$("seek");
   sk.value=Math.round(f*1000); sk.style.setProperty("--p",(f*100)+"%"); $("fclock").textContent=idle?"":(P===F?fmtT(P.t,true).slice(11):fmtT(P.t,true).slice(5))+"Z"; }
-function enterFocus(e){ if(G.playing) setPlaying(false); $("speed").value=spd.focus; $("focusbar").insertBefore($("fbplay"),$("fbtools")); FZ.z=1; FZ.px=0; FZ.py=0;
+/* phone layout: show one of the three sections at a time (CSS hides the others above 820 px it has no effect) */
+/* the play bar lives in the focus bar / toolbar on desktop and in the fixed #mobplay dock on a phone */
+function dockPlay(inFocus){ const m=matchMedia("(max-width:820px)").matches, fp=$("fbplay");
+  if(m) $("mobplay").append(fp); else if(inFocus) $("focusbar").insertBefore(fp,$("fbtools")); else $("nav").prepend(fp); }
+matchMedia("(max-width:820px)").addEventListener("change",()=>dockPlay(!!F));
+function mobView(v){ document.body.dataset.view=v; for(const b of $("mobnav").children) b.classList.toggle("on",b.dataset.v===v);
+  window.scrollTo(0,0); requestAnimationFrame(()=>{ ovBase=null; schedule(); updateField(); }); }
+$("mobnav").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) mobView(b.dataset.v); });
+mobView("events"); dockPlay(false);
+function enterFocus(e){ if(matchMedia("(max-width:820px)").matches) mobView("charts"); if(G.playing) setPlaying(false); $("speed").value=spd.focus; dockPlay(true); FZ.z=1; FZ.px=0; FZ.py=0;
   if(!F){ F={saved:{sig:{...S.sig},sda:{...S.sda}}}; document.body.classList.add("focus"); }
   $("sigmenu").open=false;
   const pad=1200; Object.assign(F,{ev:e,w0:Math.max(0,e.t0-pad),w1:Math.min(N,e.t1+pad),speed:+$("speed").value,all:false});
@@ -851,7 +912,7 @@ function enterFocus(e){ if(G.playing) setPlaying(false); $("speed").value=spd.fo
 }
 function exitFocus(){
   if(!F) return; FZ.z=1; FZ.px=0; FZ.py=0; setPlaying(false); Object.assign(S.sig,F.saved.sig); Object.assign(S.sda,F.saved.sda); F=null; S.pin=null; S.cur=null; evKey="";
-  $("nav").prepend($("fbplay")); $("speed").value=spd.free; G.playing=false; $("play").innerHTML=PLAY; updateSeek();
+  dockPlay(false); $("speed").value=spd.free; G.playing=false; $("play").innerHTML=PLAY; updateSeek();
   document.body.classList.remove("focus"); $("navtools").append($("tools")); fb=fbAll; syncControls(); ovBase=null; buildStack(); try{ history.replaceState(null,"","#v="+Math.round(S.v0)+","+Math.round(S.v1)); }catch(err){}
 }
 let fb=null, fbAll=null;
