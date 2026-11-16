@@ -82,6 +82,16 @@
   .tab:hover{color:var(--ink)} .tab.on{color:var(--ink);border-bottom-color:var(--ink);font-weight:600}
   .tab .n{font-family:var(--data);font-size:12.5px;color:var(--muted);font-weight:400}
   .srcrow{display:flex;align-items:center;gap:10px;padding-bottom:12px}
+  /* Dev check: our dev detections scored against the labels */
+  .cmphead{padding:12px 20px;border-bottom:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink);font-size:14px;line-height:1.5}
+  .cmphead b{font:600 21px var(--serif)}
+  .cmpnote{margin:0;padding:8px 20px;color:var(--muted);font-size:13px;line-height:1.4}
+  .cmpsec{padding:12px 20px 4px;font:600 12px var(--data);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;border-top:1px solid var(--rule-2)}
+  .st{font:600 11.5px var(--data);padding:0 6px;border:1px solid currentColor;border-radius:3px;white-space:nowrap}
+  .st.ok{color:var(--t3t)} .st.bad{color:var(--bad)}
+  .jmp{border:0;background:none;padding:0;font:inherit;color:var(--leg);text-decoration:underline;cursor:pointer}
+  .cmpcard{margin:10px 0 14px;padding-top:8px;border-top:1px solid var(--rule-2)} .cmpcard p{margin:4px 0 0;line-height:1.5}
+  body.cmpview #tabs,body.cmpview #sort{display:none}
   #evlist{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;border-top:1px solid var(--ink)}
   .ev{--c:var(--muted);display:grid;grid-template-columns:14px 1fr auto;grid-template-areas:"mk cl id" ". l2 l2";gap:2px 10px;align-items:baseline;width:100%;padding:9px 20px;border:0;border-top:1px solid var(--rule-2);background:none;color:var(--ink);text-align:left;cursor:pointer;transition:background .15s;flex:none}
   .ev:first-child{border-top:0}
@@ -270,6 +280,7 @@
         <select id="sort" aria-label="Sort detections"><option value="time">By time</option><option value="class">By class</option><option value="conf">By confidence</option></select></div>
       <div class="tabs" id="tabs" role="group" aria-label="Filter by class"></div>
       <div class="srcrow"><span class="lbl">Show</span><div class="seg" id="layers" role="group" aria-label="Event source"><button data-l="both" class="on">Both</button><button data-l="labels">Labels</button><button data-l="detections">Detected</button><button data-l="off">Off</button></div></div>
+      <div class="srcrow" id="viewrow"><span class="lbl">View</span><div class="seg" id="viewseg" role="group" aria-label="List view"><button data-v="events" class="on">Events</button><button data-v="compare" title="Our detections on the dev days, scored against the labels">Dev check</button></div></div>
     </div>
     <div id="evlist"></div>
   </aside>
@@ -700,7 +711,8 @@ function buildOv(){
 }
 function drawOv(){
   if(!ovBase) return; const cv=$("ov"), {ctx,w,h}=fit(cv), {PW}=ovBase; if(cv.width!==ovBase.base.width){ buildOv(); return; }
-  ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(ovBase.base,0,0); const dpr=window.devicePixelRatio||1; ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);   // the cached base is transparent: without this the 6 % window fill piles up on every drag frame
+  ctx.drawImage(ovBase.base,0,0); const dpr=window.devicePixelRatio||1; ctx.setTransform(dpr,0,0,dpr,0,0);
   const sel=EV.find(e=>e.id===S.sel);   // the selected event's bar gets an ink outline
   if(sel&&evVisible(sel)&&ovBase.laneY[sel.src]!=null){ const x0=PL+sel.t0/N*PW, ww=Math.max(1.5,(sel.t1-sel.t0)/N*PW); ctx.strokeStyle=C.ink; ctx.lineWidth=1.6; ctx.strokeRect(x0-.8,ovBase.laneY[sel.src]-.8,ww+1.6,13.6); }
   const x0=PL+S.v0/N*PW, x1=PL+S.v1/N*PW, ww=Math.max(4,x1-x0), top=2, bot=ovBase.bot;
@@ -990,9 +1002,37 @@ function renderCard(){
   box.innerHTML='<div class="ctop"><span class="cls"><i class="k '+e.cls+'"></i>'+CNAME[e.cls]+'</span><span class="cid">'+esc(e.id)+'</span></div>'+
    '<div class="meta">'+e.tractors.map(t=>'<span class="tch" style="color:'+TTXT[t]+'">'+t+"</span>").join("")+'<span class="when">'+fmtT(e.t0,true).slice(5)+"Z → "+fmtT(e.t1,true).slice(e.t1-e.t0>86400?5:11)+"Z</span><span>"+fmtDur(e.t1-e.t0)+"</span></div>"+
    '<div class="verdict"><div><span class="lbl">Recommended action</span><b>'+e.action.replace(/_/g," ")+'</b></div><div class="conf"><span class="lbl">Confidence</span>'+conf+"</div></div>"+
-   '<div class="evid"><span class="lbl">Evidence <span style="font-weight:400">(underlined times seek the playhead)</span></span>'+ev+
+   '<div class="evid">'+cmpHtml(e)+'<span class="lbl">Evidence <span style="font-weight:400">(underlined times seek the playhead)</span></span>'+ev+
    '<details class="src"><summary>Advisories and RFI reports ('+items.length+')</summary><div class="sdad">'+(items.length?items.map(x=>"<p>"+x.h+"</p>").join(""):'<p class="muted">None near this event.</p>')+"</div></details></div>";
   box.querySelectorAll("button.ts").forEach(b=>b.onclick=()=>{ setPlaying(false); F.t=+b.dataset.s; tickFocus(); });
+  box.querySelectorAll("button.jmp").forEach(b=>b.onclick=()=>{ const t=EV.find(x=>x.id===b.dataset.j); if(t) enterFocus(t); });
+}
+/* ---------- dev check: our detections vs the labels (B.compare comes from make_explorer.py, scored by the organizers' scorer) ---------- */
+function cmpHtml(e){
+  const c=B.compare; if(!c) return "";
+  const pill=(t,ok)=>'<span class="st '+(ok?"ok":"bad")+'">'+t+"</span>", jump=id=>'<button class="jmp" data-j="'+id+'">'+id+"</button>";
+  let h="";
+  if(e.src==="label"){ const r=c.episodes.find(x=>x.id===e.id); if(!r) return "";
+    h=r.matched?pill(r.correct?"Matched":"Wrong class",r.correct)+" by "+jump(r.det||"?")+": "+CNAME[r.pred]+", onset "+(r.onset_s>=0?"+":"")+(r.onset_s/60).toFixed(1)+" min, time overlap "+r.time_iou.toFixed(2)+", tractor overlap "+r.tractor_iou.toFixed(2)+(r.action_ok?", action agrees":", action differs")
+      :pill("Missed",false)+" no detection matched this label"; }
+  else if(e.id.startsWith("DV")){ const r=c.episodes.find(x=>x.det===e.id), f=c.fps.find(x=>x.det===e.id);
+    h=r?pill(r.correct?"Matches label":"Wrong class",r.correct)+" "+jump(r.id)+" ("+CNAME[r.truth]+")":f?pill("False positive",false)+" no label matches this detection":'<span class="muted">No label for this one (the scorer allows extra short multipath reports).</span>'; }
+  return h?'<div class="cmpcard"><span class="lbl">Against the dev labels</span><p>'+h+"</p></div>":"";
+}
+function renderCompare(box){
+  const c=B.compare, esc=x=>String(x).replace(/&/g,"&amp;").replace(/</g,"&lt;"); box.textContent="";
+  box.append(el("div",{class:"cmphead",html:"<b>"+c.score.toFixed(2)+" / "+c.max+"</b> dev diagnostic<br>"+c.correct+"/"+c.n+" classes right · "+c.action+"/"+c.n+" actions right · "+c.fps.length+" false positives · "+c.benign_multipath+" extra multipath reports allowed"}),
+    el("p",{class:"cmpnote"},"In-sample: the rules were read from these 12 episodes, so this shows they fit, not how they generalise. Click a label to replay it with our match."));
+  box.append(el("div",{class:"cmpsec"},"Labels (dev, hours 0-48)"));
+  for(const r of c.episodes){ const lab=EV.find(e=>e.id===r.id), st=!r.matched?"Missed":r.correct?"Match":"Wrong class";
+    box.append(el("button",{class:"ev",onclick:()=>lab&&enterFocus(lab)},el("i",{class:"k mk "+r.truth}),el("span",{class:"cl"},CNAME[r.truth]),el("span",{class:"id"},r.id),
+      el("span",{class:"l2"},el("span",{class:"st "+(r.correct?"ok":"bad")},st),
+        el("span",{class:"tm"},r.matched?(r.onset_s>=0?"+":"")+(r.onset_s/60).toFixed(1)+" min · IoU "+r.time_iou.toFixed(2):"no detection")))); }
+  box.append(el("div",{class:"cmpsec"},"False positives ("+c.fps.length+")"));
+  if(!c.fps.length) box.append(el("div",{class:"empty"},"None on the dev days."));
+  for(const f of c.fps){ const d=EV.find(e=>e.id===f.det); if(!d) continue;
+    box.append(el("button",{class:"ev",onclick:()=>enterFocus(d)},el("i",{class:"k mk "+d.cls}),el("span",{class:"cl"},CNAME[d.cls]),el("span",{class:"id"},d.id),
+      el("span",{class:"l2"},el("span",{class:"st bad"},"False positive"),el("span",{class:"tm"},fmtT(d.t0,false).slice(5)+"Z")))); }
 }
 
 /* ---------- pointer interaction on the stack ---------- */
@@ -1093,7 +1133,8 @@ function renderTabs(){
 let listKey="";
 function renderList(){
   const box=$("evlist"); if(!box) return;
-  const key=[S.sel,S.filter,S.sort,S.layers,mpOpen,F?1:0].join("|"); if(key===listKey&&box.dataset.k!=="") return; listKey=key; box.dataset.k="x";
+  const key=[S.sel,S.filter,S.sort,S.layers,mpOpen,F?1:0,S.view].join("|"); if(key===listKey&&box.dataset.k!=="") return; listKey=key; box.dataset.k="x";
+  if(S.view==="compare"&&B.compare) return renderCompare(box);
   const cmp={time:(a,b)=>a.t0-b.t0, class:(a,b)=>CLASSES.indexOf(a.cls)-CLASSES.indexOf(b.cls)||a.t0-b.t0, conf:(a,b)=>(b.conf??-1)-(a.conf??-1)||a.t0-b.t0}[S.sort];
   const items=EV.filter(e=>srcOk(e)&&S.cls[e.cls]), main=items.filter(e=>e.cls!=="MULTIPATH").sort(cmp), mp=items.filter(e=>e.cls==="MULTIPATH").sort(cmp);
   const row=(e,cl)=>el("button",{class:"ev "+(cl||"")+(S.sel===e.id?" on":""),onclick:()=>enterFocus(e)},
@@ -1129,6 +1170,13 @@ addEventListener("keydown",e=>{
 new ResizeObserver(()=>{ ovBase=null; schedule(); }).observe(document.body);
 addEventListener("hashchange",()=>{ readHash(); schedule(); });
 
+(function viewToggle(){
+  const seg=$("viewseg"); if(!B.compare){ $("viewrow").style.display="none"; return; }
+  seg.querySelectorAll("button").forEach(b=>b.onclick=()=>{
+    S.view=b.dataset.v; seg.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b)); document.body.classList.toggle("cmpview",S.view==="compare");
+    if(S.view==="compare") $("layers").querySelector('[data-l="both"]').click();   // lanes show labels and detections together
+    listKey=""; renderList(); schedule(); });
+})();
 /* ---------- start ---------- */
 (async function init(){
   try{ if(typeof DecompressionStream==="undefined") throw new Error("This browser has no DecompressionStream; use a current Chrome, Edge, Firefox or Safari.");

@@ -714,7 +714,8 @@ function buildOv(){
 }
 function drawOv(){
   if(!ovBase) return; const cv=$("ov"), {ctx,w,h}=fit(cv), {PW}=ovBase; if(cv.width!==ovBase.base.width){ buildOv(); return; }
-  ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(ovBase.base,0,0); const dpr=window.devicePixelRatio||1; ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);   // the cached base is transparent: without this the 6 % window fill piles up on every drag frame
+  ctx.drawImage(ovBase.base,0,0); const dpr=window.devicePixelRatio||1; ctx.setTransform(dpr,0,0,dpr,0,0);
   const sel=EV.find(e=>e.id===S.sel);   // the selected event's bar gets an ink outline
   if(sel&&evVisible(sel)&&ovBase.laneY[sel.src]!=null){ const x0=PL+sel.t0/N*PW, ww=Math.max(1.5,(sel.t1-sel.t0)/N*PW); ctx.strokeStyle=C.ink; ctx.lineWidth=1.6; ctx.strokeRect(x0-.8,ovBase.laneY[sel.src]-.8,ww+1.6,13.6); }
   const x0=PL+S.v0/N*PW, x1=PL+S.v1/N*PW, ww=Math.max(4,x1-x0), top=2, bot=ovBase.bot;
